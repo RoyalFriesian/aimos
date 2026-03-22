@@ -1,0 +1,3207 @@
+---
+description: Load the Sarnga PRD and architecture constraints for all work in this workspace.
+applyTo: "**"
+---
+
+<!-- Tip: Use /create-instructions in chat to generate content with agent assistance -->
+
+# 📄 **TECH PRD — Adaptive Agent Organization (AAO)**
+
+## **Section 1: Overview & Vision (FINAL v3)**
+
+---
+
+## 🧠 1.1 System Overview
+
+The **Adaptive Agent Organization (AAO)** is a distributed, self-evolving multi-agent system built in Go, where autonomous agents collaborate via A2A protocol to solve complex tasks with strict quality enforcement, full traceability, and horizontal scalability.
+
+The system behaves like a **real-world AI organization**, consisting of:
+
+* **CEO Agent** → strategy, hiring, governance
+* **Manager Agents** → strict coordination & validation
+* **Worker Agents** → execution with enforced self-critique
+* **Testing Team** → final validation authority
+* **Feedback Analysis Team** → continuous improvement
+
+All agents operate over a shared **Task Graph + Threaded Execution Model**, ensuring visibility, coordination, and accountability.
+
+---
+
+## 🎯 1.2 Vision
+
+To build a system that functions as a:
+
+> 🧠 **Self-evolving, fully observable, horizontally scalable AI organization**
+
+Where:
+
+* Agents can **move across systems (portable intelligence)**
+* Work is **distributed across unlimited compute (scalable execution)**
+* Every action is **traceable as a graph**
+* Every failure becomes **input for improvement**
+
+---
+
+## 🧵 1.3 Threaded Execution Model (Execution Graph)
+
+The system uses a **Thread + Subthread model** to represent all work as a **hierarchical execution graph**.
+
+---
+
+### 🧩 Thread Definition
+
+```go
+type Thread struct {
+    ThreadID   string
+    TaskID     string
+    ParentID   *string
+
+    Label      string // CEO / Manager / Team / Worker
+    AgentID    string
+    TeamName   string
+
+    Status     string
+    StartedAt  time.Time
+    EndedAt    *time.Time
+}
+```
+
+---
+
+### 🌳 Execution Graph
+
+```txt
+Main Thread (Client Request)
+  └── CEO Thread
+        └── Manager Thread (Team Alpha)
+              ├── Worker Thread (Team Alpha / Worker A)
+              ├── Worker Thread (Team Alpha / Worker B)
+        └── Manager Thread (Team Beta)
+```
+
+---
+
+### 🎯 Purpose
+
+Enables:
+
+✅ Full system observability
+✅ Clear ownership tracking
+✅ Debuggable execution paths
+✅ UI-based graph visualization
+
+---
+
+## 📉 1.4 Feedback & Improvement System
+
+The system includes a **dedicated feedback intelligence layer** to capture and act on failures.
+
+---
+
+### 📌 Feedback Sources
+
+* Client dissatisfaction
+* Manager rejection
+* Testing failure
+* Poor agent output
+* Repeated revisions
+
+---
+
+### 📦 Feedback Model
+
+```go
+type Feedback struct {
+    ID        string
+    TaskID    string
+    ThreadID  string
+
+    Source    string
+    AgentID   string
+
+    Type      string // bug, misalignment, quality_issue
+
+    Message   string
+    Rating    int
+
+    CreatedAt time.Time
+}
+```
+
+---
+
+## 🧠 1.5 Feedback Analysis Team
+
+A dedicated team of agents responsible for:
+
+* Identifying recurring issues
+* Detecting weak agents
+* Suggesting improvements
+* Recommending:
+
+  * retraining
+  * replacement
+  * new hiring
+
+---
+
+## 🔄 1.6 Continuous Improvement Loop
+
+```txt
+Execution → Feedback → Analysis → Improvement → Better Execution
+```
+
+---
+
+## ♻️ 1.7 Agent Portability (NEW CRITICAL REQUIREMENT)
+
+Agents must be **fully portable across repositories and environments**.
+
+---
+
+### 🧩 Definition
+
+> Any agent developed in one repository must be **copy-paste deployable** into another repository and start functioning without modification.
+
+---
+
+### ✅ Requirements
+
+* No tight coupling to repo-specific code
+
+* All dependencies must be:
+
+  * contract-based OR
+  * A2A-based
+
+* Agent must rely only on:
+
+  * A2A messaging
+  * Agent Directory
+  * Task Store interfaces
+
+---
+
+### 🚫 Forbidden
+
+* Direct imports across agents
+* Hidden dependencies
+* Hardcoded paths or services
+
+---
+
+### 🎯 Outcome
+
+```txt
+Agents = Plug-and-Play Intelligence Units
+```
+
+---
+
+## 📈 1.8 Horizontal Scalability (NEW CRITICAL REQUIREMENT)
+
+The system must support **massive parallel scaling** without conflicts.
+
+---
+
+### 🧩 Scenario
+
+```txt
+100 agents × 100 pods = 10,000 running agent instances
+```
+
+System must still:
+
+* Route correctly
+* Avoid duplication conflicts
+* Maintain identity clarity
+
+---
+
+### 🔑 Key Requirements
+
+---
+
+### 1. Logical vs Physical Identity
+
+Each agent has:
+
+```txt
+Logical ID  → "blog-writer-agent"
+Instance ID → "blog-writer-agent-pod-73"
+```
+
+---
+
+### 2. Stateless Execution
+
+Workers must:
+
+* Not depend on local memory
+* Fetch state from TaskStore
+
+---
+
+### 3. Task Claiming Mechanism
+
+Workers can pick tasks dynamically:
+
+```txt
+Any worker instance → can process any task
+```
+
+---
+
+### 4. No Central Bottleneck
+
+* Distributed processing
+* Event-driven coordination
+
+---
+
+### 5. Idempotent Operations
+
+Repeated execution must not break system state.
+
+---
+
+### 🎯 Outcome
+
+```txt
+System scales horizontally without coordination conflicts
+```
+
+---
+
+## 🏢 1.9 Organizational Model
+
+```txt
+Client
+  ↓
+CEO Agent
+  ↓
+Managers (Strict Enforcers)
+  ↓
+Workers (Self-Critical Executors)
+  ↓
+Testing Team (Final Gatekeeper)
+  ↓
+Feedback Team (Improvement Engine)
+```
+
+---
+
+## 🔥 1.10 Key Innovations
+
+---
+
+### ✅ Thread-Based Execution Graph
+
+Full visibility into system behavior
+
+---
+
+### ✅ Self-Critical Workers
+
+Agents must validate their own output multiple times
+
+---
+
+### ✅ Strict Manager Enforcement
+
+No misaligned work is accepted
+
+---
+
+### ✅ Independent Testing Authority
+
+Final validation layer with pass/fail control
+
+---
+
+### ✅ Feedback Intelligence System
+
+Continuous learning from failures
+
+---
+
+### ✅ Dynamic Agent Hiring
+
+System expands capabilities in real-time
+
+---
+
+### ✅ Agent Portability
+
+Agents are reusable across systems
+
+---
+
+### ✅ Horizontal Scalability
+
+System works across thousands of instances
+
+---
+
+## ⚙️ 1.11 System Principles
+
+---
+
+### Principle 1: **Trace Everything**
+
+Every action must map to:
+
+```txt
+TaskID + ThreadID
+```
+
+---
+
+### Principle 2: **Zero Trust Between Agents**
+
+* All outputs must be validated
+* No blind trust
+
+---
+
+### Principle 3: **Continuous Self-Improvement**
+
+* Feedback is mandatory
+* Learning is continuous
+
+---
+
+### Principle 4: **Strict Role Enforcement**
+
+* Workers → self-critique
+* Managers → strict validation
+* Testers → final authority
+
+---
+
+### Principle 5: **Portability by Design**
+
+Agents must work across repositories without modification.
+
+---
+
+### Principle 6: **Scalability by Default**
+
+System must function correctly under massive horizontal scaling.
+
+---
+
+### Principle 7: **CEO as Supreme Controller**
+
+CEO can:
+
+* Inspect any thread
+* Intervene anywhere
+* Replace or terminate agents
+* Override decisions
+
+---
+
+## 🚀 1.12 Expected Outcomes
+
+The system will:
+
+* Provide **graph-based execution visibility**
+* Scale across thousands of agent instances
+* Allow **plug-and-play agent reuse**
+* Continuously improve via feedback loops
+* Maintain **strict output quality guarantees**
+* Operate as a **self-growing AI organization**
+
+---
+
+## 📌 End of Section 1 (FINAL LOCKED)
+
+---
+
+
+Section 2 Split
+Part 1 → Core Runtime & Communication Layer (FOUNDATION)
+
+Everything required to run agents and enable them to talk
+
+Part 2 → Intelligence, Control & Observability Layer
+
+Hiring, governance, testing, feedback, tracing, etc.
+
+📄 TECH PRD — Section 2 (Part 1): Core Runtime & Communication Layer
+🧠 2.1 Purpose of This Layer
+
+This layer is the foundation of the entire system.
+
+It ensures:
+
+Agents can exist, discover each other, and communicate reliably
+
+Without this layer:
+
+No agent interaction ❌
+
+No scalability ❌
+
+No portability ❌
+
+🧱 2.2 Components in This Part
+
+This section includes:
+
+Agent Kernel (Runtime Engine)
+
+A2A Messaging System
+
+Transport Layer (inproc / HTTP / gRPC)
+
+Agent Directory (Discovery System)
+
+🧭 2.3 Agent Kernel (Runtime Engine)
+🔥 What It Is
+
+The Agent Kernel is the central runtime that:
+
+Boots all agents
+
+Registers them
+
+Routes messages
+
+Applies middleware
+
+Manages agent instances
+
+Think of it as:
+
+"Operating System of Agents"
+🧠 Responsibilities
+1. Agent Registration
+RegisterAgent(agent Agent)
+
+Stores agent in directory
+
+Assigns instance identity
+
+2. Message Routing
+HandleIncoming(message A2AMessage)
+
+Resolves target agent
+
+Routes message via transport
+
+3. Lifecycle Management
+
+Start / Stop agents
+
+Health monitoring
+
+Instance tracking
+
+4. Middleware Execution
+
+Before any message:
+
+Logging → Tracing → Retry → Auth → Handler
+🧩 Agent Interface (STRICT)
+type Agent interface {
+    ID() string          // logical ID (portable)
+    Role() string        // CEO / Manager / Worker / Tester
+
+    Handle(msg A2AMessage) (A2AResponse, error)
+}
+⚠️ Critical Rules
+
+❌ No direct function calls between agents
+❌ No shared state
+
+✅ All communication via A2A
+✅ Stateless execution
+
+🧠 Identity Model (VERY IMPORTANT)
+
+Each agent has:
+
+Logical ID   → "blog-writer-agent"
+Instance ID  → "blog-writer-agent-pod-42"
+
+Kernel must track:
+
+map[logicalID][]instanceIDs
+📡 2.4 A2A Messaging System
+🔥 What It Is
+
+A universal messaging system that enables:
+
+Agent → Agent communication (local + remote)
+🧩 Message Contract (FINAL)
+type A2AMessage struct {
+    MessageID string
+
+    From        string
+    To          string
+    Capability  string // optional dynamic routing
+
+    TaskID      string
+    ThreadID    string
+    TraceID     string
+
+    Type        string // command | event | query
+    Name        string
+
+    Payload     interface{}
+
+    Timestamp   time.Time
+}
+🧠 Design Principles
+1. Task Awareness
+
+Every message MUST include:
+
+TaskID + ThreadID
+2. Trace Propagation
+TraceID is mandatory across all hops
+3. Capability-Based Routing (Optional)
+
+Instead of:
+
+To: "blog-agent"
+
+You can use:
+
+Capability: "write_blog"
+🧪 Message Types
+Type	Purpose
+command	perform action
+query	request info
+event	broadcast update
+🚚 2.5 Transport Layer
+🔥 What It Is
+
+Abstract layer that decides:
+
+HOW message is delivered
+🧠 Supported Transports
+1. In-Process (Default)
+Fastest → same process
+agent.Handle(msg)
+2. HTTP (A2A Protocol)
+Cross-service communication
+POST /agents/{id}/message
+3. gRPC (Optional)
+High-performance distributed systems
+🧠 Transport Selector
+func selectTransport(agent AgentProfile) Transport {
+    if agent.local {
+        return InProc
+    }
+    if agent.grpc != "" {
+        return GRPC
+    }
+    return HTTP
+}
+⚠️ Rules
+
+❌ Agents MUST NOT choose transport
+✅ Kernel decides transport
+
+🔎 2.6 Agent Directory (Discovery System)
+🔥 What It Is
+
+The central intelligence layer for discovery.
+
+Think:
+
+LinkedIn + DNS + Service Registry
+🧠 Responsibilities
+1. Agent Registration
+Register(profile AgentProfile)
+2. Capability Search
+FindByCapability("write_blog")
+3. Instance Tracking
+GetInstances(agentID)
+4. Health Tracking
+
+active
+
+busy
+
+failed
+
+🧩 Agent Profile (FINAL)
+type AgentProfile struct {
+    ID           string
+    Role         string
+
+    Capabilities []string
+
+    InstanceIDs  []string
+
+    Endpoints struct {
+        InProc bool
+        HTTP   string
+        GRPC   string
+    }
+
+    Status string
+
+    Performance struct {
+        SuccessRate float64
+        Latency     int
+    }
+}
+🧠 Capability-Based Discovery Flow
+Agent needs: "summarize_blog"
+
+→ Directory खोजता है candidates
+→ Rank based on performance
+→ Return best agent
+⚠️ Rules
+
+❌ No hardcoded agent names
+✅ Always use directory when possible
+
+🔄 2.7 End-to-End Flow (Part 1 Scope)
+1. Agent sends message
+
+2. Kernel intercepts
+
+3. Directory resolves target
+
+4. Transport selected
+
+5. Message delivered
+
+6. Target agent handles
+
+7. Response returned
+🔐 2.8 Guarantees from This Layer
+✅ Communication Consistency
+
+Same API for local + remote
+
+✅ Scalability
+
+Multiple instances per agent supported
+
+✅ Portability
+
+No direct dependencies
+
+✅ Observability Ready
+
+TraceID flows through all messages
+
+⚠️ 2.9 Common Implementation Mistakes (Avoid)
+
+❌ Direct imports between agents
+❌ Skipping directory
+❌ Embedding business logic in transport
+❌ Ignoring TraceID / ThreadID
+❌ Stateful workers
+
+📌 End of Section 2 — Part 1
+
+
+TECH PRD — Section 2 (Part 2): Intelligence, Control & Observability Layer
+🧠 2.1 Purpose of This Layer
+
+This layer enables:
+
+Agents to think, collaborate, evolve, and be governed
+
+If Part 1 is the “nervous system”, this is the:
+
+Brain + Memory + Management + Quality Control
+🧱 2.2 Components in This Part
+
+This section includes:
+
+Task Store (Shared State System)
+
+Thread & Trace Engine (Execution Graph)
+
+Agent Factory (Hiring System)
+
+Governance Layer (CEO Control System)
+
+Testing System (Quality Gate)
+
+Feedback System + Feedback Team
+
+Observability Layer (Logs, Metrics, Graph)
+
+📦 2.3 Task Store (Shared Brain)
+🔥 What It Is
+
+The Task Store is the single source of truth for all work.
+
+Every agent reads from and writes to it.
+
+🧠 Responsibilities
+
+Store task definition
+
+Track progress
+
+Maintain team structure
+
+Persist updates
+
+Enable cross-agent synchronization
+
+🧩 Interface
+type TaskStore interface {
+    Create(task Task) error
+    Update(task Task) error
+    Get(taskID string) (Task, error)
+
+    AppendUpdate(taskID string, update TaskUpdate) error
+}
+⚙️ Design Requirements
+1. Strong Consistency
+
+All agents must see:
+
+Same state → Same truth
+2. Concurrency Safe
+
+Multiple agents updating simultaneously must not corrupt state.
+
+3. Stateless Agents
+
+Agents MUST NOT store task state locally.
+
+Always → Read → Process → Write back
+🧵 2.4 Thread & Trace Engine (Execution Graph Core)
+🔥 What It Is
+
+This is the most important observability component.
+
+It tracks:
+
+Who did what, when, and under which context
+🧩 Thread System
+Thread Store Interface
+type ThreadStore interface {
+    CreateThread(thread Thread) error
+    GetThread(threadID string) (Thread, error)
+    ListByTask(taskID string) []Thread
+}
+Key Responsibilities
+
+Maintain parent-child hierarchy
+
+Track ownership (CEO / Manager / Worker)
+
+Enable UI graph rendering
+
+🧠 Trace Engine
+
+Tracks step-by-step execution
+
+type TraceEngine interface {
+    StartTrace(taskID string) string
+    AddStep(traceID string, step TraceStep)
+}
+Trace Step
+type TraceStep struct {
+    From      string
+    To        string
+    Action    string
+    ThreadID  string
+    Timestamp time.Time
+}
+⚙️ Guarantees
+✅ Every action must:
+
+Have TraceID
+
+Belong to a ThreadID
+
+✅ Graph must be reconstructable:
+Client → CEO → Manager → Worker → Tester
+🏭 2.5 Agent Factory (Dynamic Hiring System)
+🔥 What It Is
+
+System that allows CEO to:
+
+Create new agents dynamically when capability is missing
+🧠 Responsibilities
+
+Select template
+
+Generate agent code/config
+
+Deploy agent
+
+Register in directory
+
+🧩 Interface
+type AgentFactory interface {
+    Hire(requirement Requirement) (AgentProfile, error)
+}
+⚙️ Internal Flow
+Requirement
+   ↓
+Template Selection
+   ↓
+Agent Generation
+   ↓
+Deployment (container / process)
+   ↓
+Registration in Directory
+⚠️ Critical Constraints
+1. Portability
+
+Generated agent must:
+
+Work in ANY repo without modification
+2. Role Enforcement
+
+CEO must assign:
+
+Role (Worker / Manager / Tester)
+
+Strict behavior rules
+
+3. Capability Declaration
+
+Agent must expose:
+
+Capabilities → Directory searchable
+⚖️ 2.6 Governance Layer (CEO Control System)
+🔥 What It Is
+
+The control plane of the entire system.
+
+Enables CEO to:
+
+Observe + Intervene + Control
+🧠 Capabilities
+1. Global Visibility
+GetTask(taskID)
+GetAllAgents()
+GetThread(threadID)
+2. Intervention
+Intervene(threadID)
+OverrideInstruction(agentID)
+3. Termination
+TerminateTask(taskID)
+StopAgent(agentID)
+4. Replacement
+ReplaceAgent(oldAgent, newAgent)
+⚠️ Rules
+
+CEO is the only agent with global override power.
+
+🧪 2.7 Testing System (Final Quality Gate)
+🔥 What It Is
+
+Independent team that validates:
+
+Final output correctness + alignment with requirements
+🧠 Responsibilities
+
+Validate output
+
+Detect bugs / misalignment
+
+Reject if needed
+
+🧩 Output
+type TestResult struct {
+    Status  string // PASS / FAIL
+    Issues  []string
+}
+⚠️ Rules
+❗ No bypass allowed
+
+Every task MUST go through testing.
+
+❗ Independent authority
+
+Testing team does NOT depend on managers.
+
+📉 2.8 Feedback System + Feedback Team
+🔥 What It Is
+
+Captures:
+
+Failures, dissatisfaction, poor performance
+🧩 Feedback Store
+type FeedbackStore interface {
+    Add(feedback Feedback)
+    GetByTask(taskID string) []Feedback
+}
+🧠 Feedback Team Responsibilities
+
+Analyze patterns
+
+Detect weak agents
+
+Suggest improvements
+
+🔄 Example Loop
+Worker produces bad output
+→ Manager rejects
+→ Feedback logged
+→ Feedback team analyzes
+→ CEO decides:
+     retrain / replace / hire new agent
+📊 2.9 Observability Layer
+🔥 What It Is
+
+System-wide visibility layer.
+
+🧠 Includes
+1. Execution Graph (Threads)
+
+Visual hierarchy
+
+Expandable nodes
+
+2. Trace Logs
+
+Step-by-step execution
+
+3. Metrics
+
+Agent performance
+
+Success rates
+
+Latency
+
+4. Debug Tools
+
+Replay execution
+
+Inspect failures
+
+🖥️ Future UI Capabilities
+- Graph view (CEO → Manager → Worker)
+- Filter by agent/team
+- Highlight failures
+- Timeline playback
+🔄 2.10 End-to-End Flow (Full System)
+1. Client creates task
+
+2. CEO:
+   - creates task
+   - starts thread
+   - forms teams
+
+3. If missing capability:
+   → Agent Factory hires agent
+
+4. Managers:
+   - create subthreads
+   - assign workers
+
+5. Workers:
+   - execute
+   - self-critique
+   - update TaskStore
+
+6. Managers:
+   - strictly validate
+
+7. Testing Team:
+   - final validation
+
+8. If failure:
+   → Feedback logged
+
+9. Feedback Team:
+   - analyzes issues
+
+10. CEO:
+   - intervenes / improves system
+
+11. Task completes
+🔐 2.11 Guarantees from This Layer
+✅ Full Traceability
+
+Every action is recorded
+
+✅ Continuous Improvement
+
+System learns from failures
+
+✅ Dynamic Evolution
+
+New agents can be created anytime
+
+✅ Strict Quality Control
+
+Multi-layer validation enforced
+
+⚠️ 2.12 Common Implementation Mistakes (Avoid)
+
+❌ Skipping Thread creation
+❌ Not attaching TraceID
+❌ Letting workers bypass manager
+❌ Weak testing layer
+❌ Ignoring feedback loop
+❌ Creating agents without directory registration
+
+📌 End of Section 2 (COMPLETE)
+
+
+TECH PRD — Section 3: Data Models & Schemas
+🧠 3.1 Purpose of This Section
+
+This section defines:
+
+Exact data structures, contracts, and storage schemas required to build the system
+
+It ensures:
+
+All developers use consistent models
+
+System remains scalable and traceable
+
+Data flows are well-defined and enforceable
+
+🧱 3.2 Data Domains Overview
+
+The system is divided into 6 core data domains:
+
+1. Agent Domain        → Agents, profiles, instances
+2. Task Domain         → Tasks, teams, updates
+3. Thread Domain       → Execution graph
+4. Messaging Domain    → A2A messages
+5. Feedback Domain     → Issues, ratings
+6. Trace Domain        → Execution steps
+🤖 3.3 Agent Domain
+🧩 3.3.1 AgentProfile (Logical Identity)
+type AgentProfile struct {
+    ID           string   // logical ID (portable)
+    Name         string
+
+    Role         string   // CEO | Manager | Worker | Tester | Feedback
+
+    Capabilities []string
+
+    Version      string
+
+    CreatedBy    string   // CEO / system
+
+    Status       string   // active, idle, busy, terminated
+
+    Endpoints    AgentEndpoints
+
+    Performance  AgentMetrics
+
+    CreatedAt    time.Time
+    UpdatedAt    time.Time
+}
+🌐 3.3.2 AgentEndpoints
+type AgentEndpoints struct {
+    InProc bool
+    HTTP   string
+    GRPC   string
+}
+📊 3.3.3 AgentMetrics
+type AgentMetrics struct {
+    SuccessRate float64
+    ErrorRate   float64
+    AvgLatency  int64
+    TaskCount   int64
+}
+⚙️ 3.3.4 AgentInstance (Physical Identity)
+type AgentInstance struct {
+    InstanceID string
+    AgentID    string
+
+    PodName    string
+    Host       string
+
+    Status     string // active, busy, down
+
+    LastSeen   time.Time
+}
+🔗 Relationship
+AgentProfile (1) → (N) AgentInstances
+📦 3.4 Task Domain
+🧩 3.4.1 Task
+type Task struct {
+    ID          string
+    Title       string
+    Description string
+
+    Status      string // pending, in_progress, blocked, completed
+
+    CreatedBy   string // client / CEO
+
+    CEO         string
+
+    Teams       []Team
+
+    SubTasks    []string
+
+    Context     map[string]interface{}
+
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
+}
+👥 3.4.2 Team
+type Team struct {
+    TeamID    string
+    Name      string
+
+    Manager   string
+    Workers   []string
+
+    SubTaskID string
+}
+📝 3.4.3 TaskUpdate
+type TaskUpdate struct {
+    UpdateID  string
+    TaskID    string
+
+    AgentID   string
+    ThreadID  string
+
+    Message   string
+    Status    string
+
+    CreatedAt time.Time
+}
+🧵 3.5 Thread Domain (Execution Graph)
+🧩 3.5.1 Thread
+type Thread struct {
+    ThreadID   string
+    TaskID     string
+
+    ParentID   *string
+
+    Label      string // CEO / Manager / Worker / Tester
+    AgentID    string
+    TeamName   string
+
+    Status     string // running, completed, failed
+
+    StartedAt  time.Time
+    EndedAt    *time.Time
+}
+🌳 Relationships
+Thread (1) → (N) Child Threads
+Task (1) → (N) Threads
+🎯 Constraints
+
+Every thread MUST have:
+
+TaskID
+
+AgentID
+
+Parent-child relationship must be preserved
+
+📡 3.6 Messaging Domain (A2A)
+🧩 3.6.1 A2AMessage
+type A2AMessage struct {
+    MessageID string
+
+    From      string
+    To        string
+
+    Capability string // optional dynamic routing
+
+    TaskID    string
+    ThreadID  string
+    TraceID   string
+
+    Type      string // command | query | event
+    Name      string
+
+    Payload   interface{}
+
+    Timestamp time.Time
+}
+🧩 3.6.2 A2AResponse
+type A2AResponse struct {
+    MessageID string
+
+    Status    string // success, error
+
+    Payload   interface{}
+    Error     string
+
+    Timestamp time.Time
+}
+⚠️ Constraints
+
+TaskID, ThreadID, TraceID are mandatory
+
+Messages must be idempotent
+
+📉 3.7 Feedback Domain
+🧩 3.7.1 Feedback
+type Feedback struct {
+    ID        string
+
+    TaskID    string
+    ThreadID  string
+
+    AgentID   string
+
+    Source    string // client, manager, tester
+
+    Type      string // bug, misalignment, quality_issue
+
+    Message   string
+    Rating    int // 1–5
+
+    CreatedAt time.Time
+}
+🧠 Use Cases
+
+Track failures
+
+Analyze weak agents
+
+Drive improvement
+
+🧠 3.8 Trace Domain
+🧩 3.8.1 Trace
+type Trace struct {
+    TraceID string
+    TaskID  string
+
+    StartedAt time.Time
+}
+🧩 3.8.2 TraceStep
+type TraceStep struct {
+    StepID    string
+    TraceID   string
+
+    From      string
+    To        string
+
+    Action    string
+
+    ThreadID  string
+
+    Timestamp time.Time
+}
+🔗 Relationship
+Trace (1) → (N) TraceSteps
+🗄️ 3.9 Storage Design (Database Schema)
+Recommended DB: PostgreSQL
+Tables
+agents
+agent_instances
+tasks
+teams
+task_updates
+threads
+messages
+feedback
+traces
+trace_steps
+Key Indexes
+🔹 agents
+PRIMARY KEY (id)
+INDEX (role)
+INDEX (capabilities)
+🔹 threads
+INDEX (task_id)
+INDEX (parent_id)
+🔹 messages
+INDEX (task_id)
+INDEX (trace_id)
+🔹 feedback
+INDEX (task_id)
+INDEX (agent_id)
+⚙️ 3.10 Data Flow Relationships
+🔄 End-to-End Flow
+Task
+  ↓
+Threads (execution graph)
+  ↓
+Messages (communication)
+  ↓
+Updates (progress)
+  ↓
+Feedback (issues)
+  ↓
+Trace (full history)
+🔐 3.11 Data Integrity Rules
+✅ MUST
+
+Every message → valid TaskID + ThreadID
+
+Every thread → valid parent or root
+
+Every feedback → linked to thread
+
+Every trace step → linked to trace
+
+❌ NEVER
+
+Orphan threads
+
+Messages without trace
+
+Feedback without context
+
+⚠️ 3.12 Common Implementation Mistakes
+
+❌ Using local memory instead of DB
+❌ Skipping thread creation
+❌ Not indexing properly
+❌ Storing large payloads unstructured
+❌ Ignoring relationships
+
+📌 End of Section 3
+
+
+TECH PRD — Section 4: Agent Behavior & Role Specifications
+🧠 4.1 Purpose of This Section
+
+This section defines:
+
+How each agent MUST behave, think, validate, and interact
+
+This is not optional logic—these are enforced behavioral contracts.
+
+🧱 4.2 Agent Roles Overview
+
+The system defines 5 primary roles:
+
+1. CEO Agent        → Strategy, Hiring, Governance
+2. Manager Agent    → Strict coordination & validation
+3. Worker Agent     → Execution + self-critique
+4. Testing Agent    → Final validation (pass/fail)
+5. Feedback Agent   → Analysis & improvement
+⚠️ 4.3 Universal Behavior Rules (ALL AGENTS)
+
+These rules apply to every agent without exception.
+
+✅ Rule 1: Task & Thread Awareness
+
+Every action MUST include:
+
+TaskID + ThreadID + TraceID
+✅ Rule 2: No Blind Trust
+Never trust input without validation
+✅ Rule 3: Structured Output Only
+
+Agents must return:
+
+structured responses
+
+no ambiguous text
+
+clear status (success/fail)
+
+✅ Rule 4: Logging is Mandatory
+
+Every action must:
+
+→ Update TaskStore
+→ Add TraceStep
+❌ Rule 5: No Direct Communication
+
+Agents MUST NOT:
+
+call other agents directly
+
+bypass A2A system
+
+🧑‍💼 4.4 CEO Agent (Supreme Controller)
+🧠 Role Definition
+
+The CEO is:
+
+Planner + Hiring Authority + Observer + Controller
+🔥 Responsibilities
+1. Task Initialization
+
+Create task
+
+Start main thread
+
+Initialize trace
+
+2. Task Decomposition
+Break task → subtasks → assign teams
+3. Team Formation
+
+Select managers
+
+Assign workers
+
+Create team structure
+
+4. Dynamic Hiring
+If capability missing → hire new agent
+5. Global Monitoring
+
+CEO can inspect:
+
+any task
+
+any thread
+
+any agent
+
+6. Intervention
+
+CEO can:
+
+override instructions
+
+reassign agents
+
+terminate tasks
+
+restructure teams
+
+⚠️ CEO Strict Rules
+❗ Must NOT delegate blindly
+
+CEO must:
+
+Validate manager selection
+Validate capability matching
+❗ Must ensure quality pipeline exists
+
+CEO MUST ensure:
+
+Worker → Manager → Testing → Feedback
+👨‍💼 4.5 Manager Agent (Strict Enforcer)
+🧠 Role Definition
+
+Manager is:
+
+Coordinator + Quality Gate (before testing)
+🔥 Responsibilities
+1. Subtask Ownership
+
+Own assigned subtask
+
+Create subthreads
+
+2. Worker Assignment
+
+Select workers via directory
+
+Assign tasks
+
+3. STRICT Validation
+
+Manager must:
+
+Reject ANY misaligned work
+4. Clarification Handling
+
+Answer worker questions
+
+Escalate to CEO if needed
+
+⚠️ Manager Strict Rules
+❗ ZERO tolerance for bad work
+
+Reject if:
+
+incomplete
+
+vague
+
+incorrect
+
+misaligned with requirements
+
+❗ No “almost correct”
+Either correct OR reject
+❗ Must enforce requirements
+
+Manager ensures:
+
+business requirement alignment
+
+completeness
+
+correctness
+
+👷 4.6 Worker Agent (Self-Critical Executor)
+🧠 Role Definition
+
+Worker is:
+
+Executor + Self-Critic + Self-Validator
+🔥 Responsibilities
+1. Task Execution
+
+Perform assigned work
+
+Use Task context
+
+2. SELF-CRITIQUE (MANDATORY)
+
+Worker must:
+
+Review its own output multiple times
+🧠 Self-Critique Loop
+Generate → Review → Improve → Review → Finalize
+Required Checks:
+
+correctness
+
+completeness
+
+alignment with task
+
+edge cases
+
+3. Confidence Validation
+
+Worker must ask:
+
+"Is this production-grade output?"
+
+If NO → improve again
+
+⚠️ Worker Strict Rules
+❗ NEVER send first output
+At least 2–3 internal reviews required
+❗ MUST reject own output if weak
+❗ MUST ask manager if unclear
+🧪 4.7 Testing Agent (Final Authority)
+🧠 Role Definition
+
+Testing agent is:
+
+Independent validator (FINAL GATE)
+🔥 Responsibilities
+1. Requirement Validation
+
+Check alignment with task requirements
+
+2. Bug Detection
+
+Logical errors
+
+Missing cases
+
+Incorrect assumptions
+
+3. Final Decision
+PASS or FAIL (no middle ground)
+⚠️ Testing Rules
+❗ Cannot trust Manager
+
+Testing must independently validate
+
+❗ Must fail if ANY issue exists
+❗ No partial approval
+📉 4.8 Feedback Agent (Improvement Engine)
+🧠 Role Definition
+
+Feedback agent is:
+
+System optimizer + quality analyst
+🔥 Responsibilities
+1. Analyze Feedback
+
+identify patterns
+
+detect weak agents
+
+2. Root Cause Analysis
+Why did failure happen?
+3. Recommendations
+
+retrain agent
+
+replace agent
+
+hire new agent
+
+⚠️ Rules
+❗ Must not ignore repeated failures
+❗ Must provide actionable insights
+🔄 4.9 Interaction Flow Between Roles
+Worker → executes → self-critique
+
+↓
+Manager → validates → accepts/rejects
+
+↓
+Testing → final validation
+
+↓
+Feedback → analyzes failures
+
+↓
+CEO → improves system
+🔐 4.10 Behavior Enforcement Mechanisms
+
+To ensure compliance:
+
+✅ Middleware Enforcement
+
+block invalid outputs
+
+enforce schema
+
+✅ Manager Rejection
+
+acts as first filter
+
+✅ Testing Gate
+
+final authority
+
+✅ Feedback Loop
+
+long-term correction
+
+⚠️ 4.11 Common Behavior Failures (Avoid)
+
+❌ Workers skipping self-review
+❌ Managers allowing weak outputs
+❌ Testing being lenient
+❌ CEO not intervening
+❌ Feedback ignored
+
+🎯 4.12 Final Behavioral Philosophy
+Workers → Think deeply  
+Managers → Enforce strictly  
+Testers → Judge ruthlessly  
+CEO → Control globally  
+Feedback → Improve continuously
+📌 End of Section 4
+
+TECH PRD — Section 5: Execution Flow & Lifecycle
+🧠 5.1 Purpose of This Section
+
+This section defines:
+
+How the system behaves at runtime from task creation → execution → validation → completion
+
+It covers:
+
+Full lifecycle of a task
+
+Thread creation & hierarchy
+
+Agent interactions
+
+Hiring & scaling behavior
+
+Failure & escalation paths
+
+🧱 5.2 High-Level Lifecycle
+Client Request
+   ↓
+CEO Planning
+   ↓
+Team Formation / Hiring
+   ↓
+Execution (Workers)
+   ↓
+Manager Validation
+   ↓
+Testing Validation
+   ↓
+Feedback Analysis
+   ↓
+Completion OR Iteration
+🚀 5.3 Step-by-Step Execution Flow (DETAILED)
+🔹 Step 1: Task Creation (Client → CEO)
+Flow
+Client → CEO → Create Task
+Actions
+
+Generate:
+
+TaskID
+TraceID (root)
+Main Thread (Client Thread)
+
+Store:
+
+Task → TaskStore
+
+Thread → ThreadStore
+
+Trace → TraceEngine
+
+Output
+System initialized with root context
+🔹 Step 2: CEO Planning Phase
+Flow
+CEO analyzes task → breaks into subtasks
+Actions
+
+Create CEO Thread
+
+Define:
+
+subtasks
+
+required capabilities
+
+team structure
+
+Decision Point
+Are required agents available?
+🔹 Step 3: Agent Discovery / Hiring
+Case A: Agents Available
+Directory खोजता है suitable agents
+Case B: Missing Capability
+CEO → AgentFactory → HireAgent()
+Hiring Flow
+Requirement → Template → Generate → Deploy → Register
+Output
+All required agents available
+🔹 Step 4: Team Formation
+CEO Creates Teams
+Team Alpha → Manager + Workers  
+Team Beta  → Manager + Workers
+Actions
+
+Assign:
+
+Manager
+
+Workers
+
+Create Manager Threads
+
+Link to Task
+
+🔹 Step 5: Manager Task Distribution
+Flow
+Manager → Workers (via A2A)
+Actions
+
+Create Worker Threads
+
+Send execution command
+
+send({
+  To: worker,
+  TaskID: taskID,
+  ThreadID: workerThreadID,
+  Name: "execute_task"
+})
+🔹 Step 6: Worker Execution + Self-Critique
+Flow
+Worker executes → reviews → improves → finalizes
+Internal Loop (MANDATORY)
+1. Generate output  
+2. Self-review  
+3. Improve  
+4. Repeat (2–3 times minimum)  
+After Finalization
+
+Update TaskStore
+
+Send result to Manager
+
+🔹 Step 7: Manager Validation
+Flow
+Manager reviews worker output
+Decision
+✅ If VALID
+Forward to Testing
+❌ If INVALID
+Reject → send back to Worker
+Feedback Logging
+
+Add Feedback entry
+
+Attach ThreadID
+
+🔹 Step 8: Testing Phase (Final Gate)
+Flow
+Manager → Testing Agent
+Testing Actions
+
+Validate correctness
+
+Validate requirements alignment
+
+Detect bugs
+
+Decision
+✅ PASS
+Task proceeds to completion
+❌ FAIL
+Feedback generated → back to Manager/Worker
+🔹 Step 9: Feedback Loop
+Trigger Conditions
+
+Manager rejection
+
+Testing failure
+
+Client dissatisfaction
+
+Actions
+Feedback stored → Feedback Team analyzes
+Output
+
+Recommendations:
+
+improve agent
+
+replace agent
+
+hire new agent
+
+🔹 Step 10: CEO Intervention (ANYTIME)
+
+CEO can intervene at ANY stage:
+
+Examples
+1. Check Status
+GetTask(taskID)
+2. Override Execution
+send({
+  To: agent,
+  Name: "override_instruction"
+})
+3. Replace Agent
+Worker → replaced with new worker
+4. Terminate Task
+Stop execution completely
+🔹 Step 11: Task Completion
+Conditions
+
+All subtasks completed
+
+Testing passed
+
+No open feedback
+
+Actions
+Update task status → completed
+Close threads
+Finalize trace
+🧵 5.4 Thread Lifecycle
+Lifecycle
+Created → Running → Completed / Failed
+Rules
+
+Every agent action → new thread or subthread
+
+Parent-child must be maintained
+
+🔄 5.5 Retry & Iteration Flow
+When triggered:
+
+Worker failure
+
+Manager rejection
+
+Testing failure
+
+Flow
+Reject → Feedback → Fix → Re-run
+⚡ 5.6 Parallel Execution Model
+Behavior
+Multiple workers execute simultaneously
+Rules
+
+No shared state
+
+TaskStore used for sync
+
+Independent threads
+
+📈 5.7 Scaling Behavior in Runtime
+Scenario
+100 worker instances available
+Behavior
+
+Any worker can pick any task
+
+Load distributed automatically
+
+Requirement
+Idempotent execution required
+🚨 5.8 Failure Handling Flow
+Types of Failures
+1. Agent Failure
+Reassign task to another instance
+2. Bad Output
+Reject → Feedback → Retry
+3. System Failure
+Retry via middleware
+🔐 5.9 Guarantees from Lifecycle
+✅ Traceability
+
+Every step logged
+
+✅ Fault Tolerance
+
+Failures handled gracefully
+
+✅ Scalability
+
+Parallel execution supported
+
+✅ Quality Assurance
+
+Multi-layer validation
+
+⚠️ 5.10 Common Flow Mistakes (Avoid)
+
+❌ Skipping thread creation
+❌ Not updating TaskStore
+❌ Workers bypassing managers
+❌ Testing skipped
+❌ Feedback ignored
+
+🎯 5.11 Final Execution Philosophy
+Plan → Execute → Validate → Test → Improve → Repeat
+📌 End of Section 5
+
+TECH PRD — Section 6: Agent Communication Protocol (A2A Spec)
+🧠 6.1 Purpose of This Section
+
+This section defines:
+
+How agents communicate, validate, route, and observe messages across the system
+
+It ensures:
+
+Reliable communication
+
+Full traceability
+
+Transport independence
+
+Strict validation
+
+🧱 6.2 Core Principles of A2A Communication
+✅ Principle 1: Protocol-First Communication
+All communication MUST use A2A messages
+✅ Principle 2: Transport Agnostic
+
+Same message works for:
+
+in-process | HTTP | gRPC
+✅ Principle 3: Context Propagation
+
+Every message MUST carry:
+
+TaskID + ThreadID + TraceID
+✅ Principle 4: Idempotency
+Repeated messages MUST NOT break system state
+✅ Principle 5: Observability Built-in
+
+Every message:
+
+logged
+
+traced
+
+measurable
+
+📡 6.3 A2A Message Contract (FINAL)
+🧩 Message Structure
+type A2AMessage struct {
+    MessageID string
+
+    From      string
+    To        string
+
+    Capability string // optional (dynamic routing)
+
+    TaskID     string
+    ThreadID   string
+    TraceID    string
+
+    Type       string // command | query | event
+    Name       string
+
+    Payload    interface{}
+
+    Metadata   map[string]string
+
+    Timestamp  time.Time
+}
+🧩 Response Structure
+type A2AResponse struct {
+    MessageID string
+
+    Status    string // success | error
+
+    Payload   interface{}
+    Error     string
+
+    Timestamp time.Time
+}
+⚠️ Mandatory Fields
+
+Every message MUST include:
+
+MessageID  
+From  
+(TaskID, ThreadID, TraceID)  
+Type  
+Name  
+Timestamp  
+🧭 6.4 Message Types
+1. Command
+"Do something"
+
+Example:
+
+execute_task
+hire_agent
+override_instruction
+2. Query
+"Give me information"
+
+Example:
+
+get_task_status
+get_agent_metrics
+3. Event
+"Something happened"
+
+Example:
+
+task.updated
+agent.hired
+task.completed
+🔀 6.5 Routing Mechanism
+🧠 Routing Modes
+1. Direct Routing
+To: "manager-agent"
+2. Capability-Based Routing (Recommended)
+Capability: "write_blog"
+🔍 Resolution Flow
+1. Message received
+2. If To exists → direct
+3. Else → resolve via directory
+4. Select best agent
+5. Forward message
+🧠 Load Balancing (Important for Scaling)
+
+If multiple instances exist:
+
+Pick instance using:
+- round robin
+- least busy
+- best performance
+🚚 6.6 Transport Layer Design
+🔌 Supported Transports
+1. In-Process Transport
+Used when agents are in same runtime
+agent.Handle(msg)
+2. HTTP Transport (A2A Compatible)
+Used for cross-service communication
+POST /a2a/message
+3. gRPC Transport (Optional)
+High-performance distributed systems
+🧠 Transport Selection Logic
+func selectTransport(agent AgentProfile) Transport {
+    if agent.Endpoints.InProc {
+        return InProc
+    }
+    if agent.Endpoints.GRPC != "" {
+        return GRPC
+    }
+    return HTTP
+}
+🧩 6.7 Middleware Stack (CRITICAL)
+
+Every message passes through middleware:
+
+Receive → Validate → Trace → Log → Retry → Route → Handle → Respond
+🧱 Required Middleware
+1. Validation Middleware
+
+Check required fields
+
+Reject invalid messages
+
+2. Trace Middleware
+
+Attach TraceID
+
+Record TraceStep
+
+3. Logging Middleware
+
+Store message logs
+
+Debug visibility
+
+4. Retry Middleware
+
+Retry failed messages
+
+Handle transient errors
+
+5. Timeout Middleware
+
+Prevent stuck requests
+
+6. Idempotency Middleware
+
+Deduplicate messages
+
+🔁 6.8 Retry & Failure Handling
+Retry Strategy
+Retry up to N times with exponential backoff
+Failure Types
+1. Network Failure
+
+→ retry
+
+2. Agent Busy
+
+→ retry OR route to another instance
+
+3. Logical Error
+
+→ return error → handled upstream
+
+🔐 6.9 Idempotency Design
+Problem
+
+Duplicate messages can occur.
+
+Solution
+
+Each message must have:
+
+MessageID (unique)
+Store processed messages:
+if already processed → ignore
+📊 6.10 Observability in Communication
+
+Every message must:
+
+1. Create Trace Step
+From → To → Action
+2. Log Message
+
+request
+
+response
+
+errors
+
+3. Metrics
+
+Track:
+
+latency
+
+success rate
+
+retries
+
+🔄 6.11 End-to-End Message Flow
+1. Agent sends message
+
+2. Middleware validates
+
+3. Directory resolves target
+
+4. Transport selected
+
+5. Message delivered
+
+6. Target agent processes
+
+7. Response returned
+
+8. Trace updated
+⚠️ 6.12 Common Implementation Mistakes (Avoid)
+
+❌ Missing TraceID
+❌ Skipping middleware
+❌ Hardcoding agent IDs
+❌ No retry logic
+❌ Not handling duplicate messages
+
+🎯 6.13 Final Communication Philosophy
+Reliable → Traceable → Scalable → Decoupled
+📌 End of Section 6
+
+TECH PRD — Section 7: Scalability, Deployment & Infrastructure Design
+🧠 7.1 Purpose of This Section
+
+This section defines:
+
+How the system is deployed, scaled, and operated in real-world environments
+
+It ensures:
+
+Massive horizontal scalability
+
+Fault tolerance
+
+Efficient resource usage
+
+Clear deployment model
+
+🧱 7.2 Deployment Philosophy
+🔑 Core Principle
+Scale horizontally, not vertically
+🔑 System Behavior
+
+Agents are stateless
+
+Work is distributed
+
+State is centralized (DB / store)
+
+🔑 Outcome
+Any agent instance can process any task
+🏗️ 7.3 Deployment Architecture (Kubernetes Recommended)
+🧩 High-Level Infra
+                 ┌──────────────────────┐
+                 │       CLIENT         │
+                 └─────────┬────────────┘
+                           │
+                  ┌────────▼────────┐
+                  │   API Gateway   │
+                  └────────┬────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+ ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼──────┐
+ │ CEO PODS    │   │ MANAGER PODS│   │ WORKER PODS │
+ └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+        │                 │                 │
+        └──────────┬──────┴──────┬──────────┘
+                   │             │
+        ┌──────────▼──────┐ ┌────▼──────────┐
+        │ TASK STORE (DB) │ │ MESSAGE LAYER │
+        └─────────────────┘ └───────────────┘
+⚙️ 7.4 Core Infrastructure Components
+1. API Gateway
+Responsibilities:
+
+Entry point for client requests
+
+Authentication
+
+Rate limiting
+
+Request routing
+
+2. Agent Services
+
+Each agent type runs as:
+
+Independent scalable service
+3. Task Store (Database)
+
+Recommended:
+
+PostgreSQL (primary)
+
+Redis (optional caching)
+
+4. Message Layer (A2A Transport)
+
+HTTP / gRPC endpoints
+
+Internal routing
+
+📈 7.5 Horizontal Scaling Strategy
+🔥 Key Idea
+Scale by adding more agent instances (pods)
+🧩 Example
+100 worker agents → 500 worker pods
+🧠 Behavior
+
+All workers identical
+
+Tasks distributed dynamically
+
+No central bottleneck
+
+⚙️ Scaling Rules
+1. Workers Scale Most
+Workers = highest scaling factor
+2. Managers Moderate Scale
+Managers = fewer but scalable
+3. CEO Minimal Scale
+CEO = 1–N (low scaling)
+🔄 7.6 Task Distribution Model
+🧠 Pull-Based Model (Recommended)
+
+Instead of pushing tasks:
+
+Workers PULL tasks from TaskStore
+Flow
+1. Worker requests task
+2. TaskStore assigns available task
+3. Worker locks task
+4. Executes
+🔐 Task Locking
+Prevent multiple workers doing same work
+Example
+Lock(taskID, workerID)
+⚡ 7.7 Load Balancing Strategy
+🧠 Levels of Load Balancing
+1. Infra Level (Kubernetes)
+
+Service-based routing
+
+Round-robin
+
+2. Application Level
+
+Agent Directory decides:
+
+Best instance based on:
+- load
+- latency
+- success rate
+🧬 7.8 Agent Instance Management
+🧩 Identity Model
+Agent ID     → logical identity
+Instance ID  → physical instance
+🧠 Example
+blog-agent
+  ├── instance-1 (pod A)
+  ├── instance-2 (pod B)
+📊 Health Tracking
+
+Each instance must:
+
+heartbeat periodically
+
+update status
+
+🔍 7.9 Service Discovery
+🧠 Mechanism
+
+Agent Directory acts as:
+
+Service Registry
+Responsibilities:
+
+Track instances
+
+Provide endpoints
+
+Enable routing
+
+🚨 7.10 Fault Tolerance Design
+🔥 Failure Types
+1. Agent Crash
+Reassign task to another instance
+2. Network Failure
+Retry via middleware
+3. Partial Execution
+Resume from TaskStore state
+🔁 Retry Strategy
+Exponential backoff
+Max retry limit
+Fallback to other instance
+📦 7.11 Stateless Execution Requirement
+🔑 Rule
+Agents must be stateless
+Why?
+
+Enables scaling
+
+Prevents inconsistency
+
+Simplifies recovery
+
+Implementation
+
+Read from TaskStore
+
+Process
+
+Write back
+
+🧠 7.12 Data Layer Design
+Primary DB
+
+PostgreSQL
+
+Optional Layers
+
+Redis → caching
+
+Queue (NATS/Kafka) → async events
+
+🔄 7.13 Event-Driven Extensions (Optional but Recommended)
+Add Pub/Sub System
+task.updated  
+agent.hired  
+task.completed  
+Benefits
+
+real-time updates
+
+decoupling
+
+scalability
+
+🔐 7.14 Security & Isolation
+Basic Requirements
+
+Auth between agents
+
+Request validation
+
+Rate limiting
+
+Future Enhancements
+
+mTLS
+
+service mesh
+
+📊 7.15 Monitoring & Metrics
+Track:
+
+task throughput
+
+agent success rate
+
+latency
+
+failure rate
+
+Tools (suggested):
+
+Prometheus
+
+Grafana
+
+⚠️ 7.16 Common Infrastructure Mistakes
+
+❌ Stateful agents
+❌ No task locking
+❌ Single point of failure
+❌ Ignoring retries
+❌ Over-centralizing CEO
+
+🎯 7.17 Final Infrastructure Philosophy
+Distributed → Stateless → Scalable → Fault-Tolerant → Observable
+📌 End of Section 7
+
+TECH PRD — Section 8: Testing, Validation & Quality Assurance System
+🧠 8.1 Purpose of This Section
+
+This section defines:
+
+How the system guarantees correctness, alignment, and production-grade output
+
+It ensures:
+
+No incorrect output reaches client
+
+Multi-layer validation is enforced
+
+Quality is measurable and improvable
+
+🧱 8.2 Quality Philosophy
+🔥 Core Principle
+"Nothing is trusted until it is tested"
+🧠 Multi-Layer Validation Model
+Worker (self-check)
+   ↓
+Manager (strict validation)
+   ↓
+Testing Team (final authority)
+   ↓
+Feedback (continuous improvement)
+🧩 8.3 Validation Layers (DETAILED)
+🔹 Layer 1: Worker Self-Validation
+Purpose
+
+Catch errors before submission
+
+Mandatory Process
+Generate → Review → Improve → Review → Finalize
+Minimum Requirements
+
+At least 2–3 internal review passes
+
+Check:
+
+correctness
+
+completeness
+
+edge cases
+
+requirement alignment
+
+Output Format
+type WorkerOutput struct {
+    Result      interface{}
+    Confidence  float64
+    SelfReview  []string
+}
+⚠️ Rules
+
+❗ Low confidence output MUST NOT be submitted
+❗ Worker must reject its own weak output
+
+🔹 Layer 2: Manager Validation
+Purpose
+
+Ensure:
+
+Output matches business requirements EXACTLY
+Validation Checklist
+
+Manager must verify:
+
+Requirement alignment
+
+Completeness
+
+Logical correctness
+
+No ambiguity
+
+Manager Decision
+type ManagerDecision struct {
+    Status string // APPROVED | REJECTED
+    Issues []string
+}
+⚠️ Manager Strict Rules
+
+❗ Reject if ANY issue exists
+❗ No partial approvals
+❗ No "almost correct"
+
+🔹 Layer 3: Testing Team (FINAL GATE)
+Purpose
+
+Independent validation before final output
+
+Testing Scope
+1. Functional Testing
+
+Does it work correctly?
+
+2. Requirement Testing
+
+Does it match client intent?
+
+3. Edge Case Testing
+
+Handles unusual inputs?
+
+4. Consistency Testing
+
+Matches system standards?
+
+Output
+type TestResult struct {
+    Status string // PASS | FAIL
+    Issues []string
+}
+⚠️ Testing Rules
+
+❗ Testing team is completely independent
+❗ Must FAIL if ANY issue exists
+❗ Cannot trust Manager blindly
+
+📊 8.4 Quality Scoring System
+🧠 Purpose
+
+Measure and improve agent performance
+
+🧩 Score Model
+type QualityScore struct {
+    AgentID string
+
+    Accuracy     float64
+    Completeness float64
+    Reliability  float64
+
+    OverallScore float64
+}
+📈 Usage
+
+Rank agents
+
+Select best agents
+
+Trigger improvements
+
+🔁 8.5 Iteration & Retry Flow
+Trigger Conditions
+
+Manager rejection
+
+Testing failure
+
+Client dissatisfaction
+
+Flow
+Reject → Feedback → Improve → Re-execute
+📉 8.6 Failure Classification
+Types of Failures
+1. Logical Error
+Incorrect reasoning
+2. Requirement Misalignment
+Did not follow instructions
+3. Incomplete Work
+Missing parts
+4. Low Quality
+Poor clarity or depth
+🧠 8.7 Automated Validation Rules
+Examples
+Rule 1: Required Fields
+Reject if output missing required data
+Rule 2: Schema Validation
+Output must match expected schema
+Rule 3: Confidence Threshold
+Reject if confidence < threshold
+🔄 8.8 Continuous Quality Improvement
+Feedback Loop
+Failure → Feedback → Analysis → Improvement
+Improvements Trigger
+
+Retrain agent
+
+Replace agent
+
+Hire new agent
+
+🧪 8.9 Testing Strategies
+1. Unit Testing (Agent Level)
+
+Test individual agent behavior
+
+2. Integration Testing
+
+Agent-to-agent interaction
+
+3. End-to-End Testing
+
+Full task execution
+
+📦 8.10 Test Data Management
+Requirements
+
+Realistic scenarios
+
+Edge cases
+
+Failure cases
+
+🔐 8.11 Quality Guarantees
+✅ No unvalidated output
+✅ Multi-layer validation enforced
+✅ Continuous improvement
+✅ Measurable quality
+⚠️ 8.12 Common Quality Failures (Avoid)
+
+❌ Workers skipping self-review
+❌ Managers being lenient
+❌ Testing bypassed
+❌ No feedback loop
+❌ No quality metrics
+
+🎯 8.13 Final Quality Philosophy
+Self-check → Strict validation → Ruthless testing → Continuous improvement
+📌 End of Section 8
+
+TECH PRD — Section 9: Observability, Monitoring & Debugging System
+🧠 9.1 Purpose of This Section
+
+This section defines:
+
+How the system exposes visibility into execution, performance, failures, and behavior
+
+It ensures:
+
+Full transparency of agent actions
+
+Fast debugging and root cause analysis
+
+Real-time monitoring of system health
+
+Visual understanding of execution flow
+
+🧱 9.2 Observability Philosophy
+🔥 Core Principle
+"If you can't see it, you can't trust or debug it"
+🧠 Observability Pillars
+1. Tracing     → What happened?
+2. Logging     → What details?
+3. Metrics     → How well?
+4. Visualization → How does it all connect?
+🧵 9.3 Trace System (Execution Visibility Core)
+🔥 What It Is
+
+Tracks:
+
+End-to-end execution of a task across all agents
+🧩 Trace Model
+type Trace struct {
+    TraceID   string
+    TaskID    string
+    StartedAt time.Time
+}
+🧩 Trace Step
+type TraceStep struct {
+    StepID    string
+    TraceID   string
+
+    From      string
+    To        string
+
+    Action    string
+    ThreadID  string
+
+    Timestamp time.Time
+}
+🧠 What It Captures
+
+Agent interactions
+
+Decisions made
+
+Execution flow
+
+Failures
+
+🌳 9.4 Thread Graph Visualization
+🔥 What It Is
+
+A hierarchical view of execution
+
+Structure
+Client Thread
+  └── CEO Thread
+        └── Manager Thread (Team A)
+              ├── Worker Thread (A1)
+              ├── Worker Thread (A2)
+        └── Testing Thread
+🧠 UI Capabilities (REQUIRED)
+1. Expandable Graph View
+
+Click → expand subthreads
+
+2. Agent/Team Filtering
+Show only Manager / Worker / Team Alpha
+3. Status Highlighting
+
+Green → success
+
+Red → failure
+
+Yellow → in progress
+
+4. Timeline View
+
+Replay execution step-by-step
+
+📝 9.5 Logging System
+🔥 Purpose
+
+Capture detailed system activity
+
+🧩 Log Structure
+type LogEntry struct {
+    LogID     string
+
+    TaskID    string
+    ThreadID  string
+    TraceID   string
+
+    AgentID   string
+
+    Level     string // INFO, WARN, ERROR
+
+    Message   string
+    Metadata  map[string]interface{}
+
+    Timestamp time.Time
+}
+🧠 Logging Requirements
+Must Log:
+
+Incoming messages
+
+Outgoing messages
+
+Decisions
+
+Errors
+
+Retries
+
+⚠️ Rules
+
+❗ No silent failures
+❗ All errors MUST be logged
+❗ Logs MUST be structured (no plain text only)
+
+📊 9.6 Metrics System
+🔥 Purpose
+
+Measure system performance
+
+🧩 Metrics Categories
+1. Task Metrics
+
+task completion time
+
+success rate
+
+retry count
+
+2. Agent Metrics
+
+success rate
+
+error rate
+
+latency
+
+3. System Metrics
+
+throughput
+
+active tasks
+
+resource usage
+
+🧠 Example Metrics
+worker_success_rate = 0.94
+avg_task_latency = 120ms
+task_failure_rate = 0.03
+🔍 9.7 Debugging System
+🔥 Goal
+
+Enable developers to:
+
+Quickly identify WHAT failed, WHERE, and WHY
+🧩 Debug Capabilities
+1. Trace Replay
+Replay entire execution flow step-by-step
+2. Thread Inspection
+
+inspect any thread
+
+see inputs/outputs
+
+3. Message Inspection
+
+view A2A messages
+
+payload + response
+
+4. Failure Drill-Down
+Task → Thread → Agent → Error
+🚨 9.8 Alerting System
+🔥 Purpose
+
+Detect issues proactively
+
+🚨 Alert Types
+1. High Failure Rate
+If agent failure > threshold
+2. Latency Spike
+If response time increases
+3. Task Stuck
+If task not progressing
+🧠 Actions
+
+notify CEO agent
+
+trigger auto-scaling
+
+trigger fallback
+
+🔄 9.9 Observability Flow
+Message → Middleware → TraceStep
+                ↓
+             Logging
+                ↓
+             Metrics
+                ↓
+          Visualization UI
+🧠 9.10 Integration with System Components
+Component	Observability Role
+A2A	logs + trace
+TaskStore	state visibility
+ThreadStore	graph
+Feedback	failure insight
+AgentDirectory	performance
+🔐 9.11 Guarantees
+✅ Full Traceability
+
+Every action can be traced
+
+✅ Debuggability
+
+Issues can be diagnosed quickly
+
+✅ Transparency
+
+System behavior is visible
+
+⚠️ 9.12 Common Observability Mistakes
+
+❌ Missing TraceID
+❌ Logging unstructured data
+❌ No thread graph
+❌ Ignoring metrics
+❌ No alerting
+
+🎯 9.13 Final Observability Philosophy
+Trace everything → Log everything → Measure everything → Visualize everything
+📌 End of Section 9
+
+TECH PRD — Section 10: Security, Governance Policies & Future Enhancements
+🧠 10.1 Purpose of This Section
+
+This section defines:
+
+How the system is secured, governed, controlled, and evolved over time
+
+It ensures:
+
+Safe and controlled agent behavior
+
+Proper access control
+
+Protection against misuse or failure
+
+Clear roadmap for future growth
+
+🔐 10.2 Security Philosophy
+🔥 Core Principle
+"Zero Trust System — verify everything, trust nothing"
+🧠 Security Layers
+1. Identity & Authentication
+2. Authorization & Access Control
+3. Communication Security
+4. Data Protection
+5. Runtime Safety
+🔑 10.3 Identity & Authentication
+🧩 Agent Identity
+
+Each agent must have:
+
+AgentID (logical)
+InstanceID (physical)
+🔐 Authentication Mechanism
+Minimum (v1)
+
+API keys / tokens between services
+
+Recommended (v2+)
+
+mTLS (mutual TLS)
+
+service identity (SPIFFE/SPIRE style)
+
+⚠️ Rules
+
+❗ Every request must be authenticated
+❗ No anonymous agent communication
+
+🛂 10.4 Authorization & Access Control
+🧠 Role-Based Access Control (RBAC)
+Roles
+CEO → full access  
+Manager → team-level access  
+Worker → task-level access  
+Tester → validation-only access  
+Feedback → analysis-only access  
+🔐 Access Rules
+CEO
+
+Can access everything
+
+Can override any agent
+
+Manager
+
+Access only assigned tasks & team
+
+Worker
+
+Access only assigned thread/task
+
+Testing
+
+Access outputs only
+
+⚠️ Enforcement
+
+All access must be validated at:
+
+A2A middleware layer
+🔒 10.5 Communication Security
+🔐 Requirements
+1. Encryption
+All communication must be encrypted (HTTPS / TLS)
+2. Message Integrity
+
+Prevent tampering
+
+Validate message structure
+
+3. Replay Protection
+
+Use MessageID
+
+Reject duplicates
+
+🛡️ 10.6 Data Protection
+🔐 Sensitive Data Handling
+Rules
+
+No sensitive data in logs
+
+Mask confidential fields
+
+Encrypt stored secrets
+
+🧠 Storage Security
+
+DB access control
+
+encrypted storage (at rest)
+
+⚙️ 10.7 Runtime Safety Controls
+🚨 Problem
+
+Agents can:
+
+behave incorrectly
+
+produce bad outputs
+
+loop infinitely
+
+🔧 Solutions
+1. Execution Limits
+Max retries  
+Max execution time  
+2. Rate Limiting
+
+Prevent:
+
+Agent overload / spam
+3. Kill Switch (CEO Control)
+
+CEO can:
+
+Terminate task  
+Stop agent  
+Override behavior  
+⚖️ 10.8 Governance Policies
+🧠 Policy Types
+1. Quality Policy
+
+No untested output
+
+Strict validation enforced
+
+2. Hiring Policy
+
+CEO must ensure:
+
+New agents meet quality standards
+3. Replacement Policy
+
+Replace agent if:
+
+repeated failures
+
+low performance
+
+4. Feedback Policy
+All failures MUST generate feedback
+5. Escalation Policy
+Worker → Manager → CEO → Client
+🧠 10.9 Audit & Compliance
+🔍 Audit Logs
+
+Track:
+
+who did what
+
+when
+
+why
+
+📦 Required Data
+
+Task history
+
+Thread history
+
+Message logs
+
+Feedback
+
+🎯 Outcome
+Fully auditable system
+🚀 10.10 Future Enhancements Roadmap
+🔮 Phase 1 (Current)
+
+A2A communication
+
+Task + Thread system
+
+Basic hiring
+
+🔮 Phase 2
+🧠 Intelligent Agent Selection
+
+ML-based ranking
+
+performance-based routing
+
+🔄 Advanced Feedback Learning
+
+auto-improvement suggestions
+
+agent retraining
+
+🔮 Phase 3
+🤖 Autonomous Organization Evolution
+
+agents redesign workflows
+
+self-optimizing teams
+
+🌐 Cross-System Agent Federation
+
+agents across different repos/orgs collaborate
+
+🔮 Phase 4
+🧠 LLM-Driven Decision Layer
+
+smarter CEO decisions
+
+adaptive planning
+
+⚠️ 10.11 Common Security & Governance Mistakes
+
+❌ No authentication between agents
+❌ Over-permissioned agents
+❌ Ignoring feedback
+❌ No audit logs
+❌ Weak testing enforcement
+
+🎯 10.12 Final System Philosophy
+Secure → Controlled → Observable → Adaptive → Self-Evolving
+📌 End of Section 10 (PRD COMPLETE)

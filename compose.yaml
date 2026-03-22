@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sarnga-postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sarnga}
+      POSTGRES_USER: ${POSTGRES_USER:-sarnga}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sarnga_dev_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sarnga} -d ${POSTGRES_DB:-sarnga}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docs/postgres/001_mission_graph.sql:/docker-entrypoint-initdb.d/001_mission_graph.sql:ro
+
+volumes:
+  postgres_data:

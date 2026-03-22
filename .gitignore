@@ -1,0 +1,28 @@
+.env# Binaries
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build artifacts
+coverage.out
+cover.out
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+
+# Local environment files
+.env
+.env.*
+
+# Logs and temporary runtime data
+*.log
+tmp/node_modules/
+web-ui/dist/
