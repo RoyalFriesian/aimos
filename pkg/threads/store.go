@@ -94,5 +94,6 @@ type Store interface {
 	AppendMessage(message Message) error
 	ListMessages(threadID string) ([]Message, error)
 	UpdateThreadMode(threadID string, mode string) error
+	UpdateThreadTitle(threadID string, title string) error
 	UpdateThreadOwner(threadID string, ownerAgentID string) error
 }

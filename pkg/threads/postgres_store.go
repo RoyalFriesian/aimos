@@ -303,7 +303,6 @@ func defaultMessageType(role Role) string {
 	}
 }
 
-
 func (s *PostgresStore) ListRootThreads() ([]Thread, error) {
 	rows, err := s.pool.Query(context.Background(), `
 		SELECT thread_id, mission_id, root_mission_id, COALESCE(parent_thread_id, ''), thread_kind, title,
@@ -330,4 +329,19 @@ func (s *PostgresStore) ListRootThreads() ([]Thread, error) {
 		results = append(results, t)
 	}
 	return results, rows.Err()
+}
+func (s *PostgresStore) UpdateThreadTitle(threadID string, title string) error {
+	query := `
+                UPDATE threads
+                SET title = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE thread_id = $1
+        `
+	tag, err := s.pool.Exec(context.Background(), query, threadID, title)
+	if err != nil {
+		return fmt.Errorf("failed to update thread title: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrThreadNotFound
+	}
+	return nil
 }

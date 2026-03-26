@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useTheme } from './ThemeProvider';
+import { useTheme } from '../../ThemeProvider';
 import { Bot, MapPin, Paperclip, ArrowRight } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '../../ui/button';
 
-import { Thread, Agent, Message } from '../types';
+import { Thread, Agent, Message } from '../../../types';
 
 interface OnboardingViewProps {
   onComplete: (newThread?: Thread, projectName?: string) => void;
@@ -22,7 +22,7 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
     if (!projectDetails.trim() || !location.trim()) return;
     setIsLoading(true);
     try {
-      const { sendCEORequest, generateAIProjectName } = await import('../api/client');
+      const { sendCEORequest, generateAIProjectName } = await import('../../../api/client');
       // Pass a brand new thread ID to force the backend to initialize a new root mission & workspace
       const newThreadId = `proj-${Date.now()}`;
       
@@ -35,7 +35,7 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
           prompt: `Project Description: ${projectDetails}
 Location: ${location}`,
           threadId: newThreadId,
-          context: { customTitle: generatedName?.name || "New Project" }
+          context: { customTitle: generatedName || "New Project" }
         });
       console.log("CEO Response:", res);
 

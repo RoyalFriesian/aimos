@@ -14,25 +14,35 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { ThreadNode } from './ThreadNode';
-import { ChatPanel } from './ChatPanel';
-import { Button } from './ui/button';
+import { ChatPanel } from '../chat/ChatPanel';
+import { Button } from '../../ui/button';
 import { Network, ZoomIn, ZoomOut, Maximize2, FolderRoot, Wrench, Eye } from 'lucide-react';
-import { Thread } from '../types';
-import { mockThreads } from '../data/mockData';
-import { useTheme } from './ThemeProvider';
-import { ThemeToggle } from './ThemeToggle';
+import { Thread } from '../../../types';
+import { mockThreads } from '../../../data/mockData';
+import { useTheme } from '../../ThemeProvider';
+import { ThemeToggle } from '../../ThemeToggle';
 
 const nodeTypes = {
   threadNode: ThreadNode,
 };
 
+/**
+ * Properties for the MindmapView visualizer.
+ */
 interface MindmapViewProps {
+  /** Callback triggered when the user attempts to focus on the root CEO node */
   onCEOClick: () => void;
+  /** True if the side project menu is collapsed, changing viewport padding */
   isSidebarCollapsed: boolean;
+  /** Designates whether the main graph or onboarding form is visible */
   activeView?: 'mindmap' | 'onboarding';
+  /** Base threads provided from app state to initialize the node graph */
   initialThreads?: Thread[] | null;
 }
 
+/**
+ * Interactive execution node graph displaying active Thread structures and their parent/child relationships.
+ */
 export function MindmapView({ onCEOClick, isSidebarCollapsed, activeView = 'mindmap', initialThreads }: MindmapViewProps) {
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);

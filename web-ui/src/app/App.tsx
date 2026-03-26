@@ -1,20 +1,29 @@
-import { MindmapView } from './components/MindmapView';
-import { Sidebar } from './components/Sidebar';
+import { MindmapView } from './components/features/workspace/MindmapView';
+import { Sidebar } from './components/features/layout/Sidebar';
 import { Toaster } from './components/ui/sonner';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ReactFlowProvider } from '@xyflow/react';
-import { useState, useEffect } from 'react';
-import { listProjects, loadProject } from './api/client';
-import { OnboardingView } from './components/OnboardingView';
+import { useEffect } from 'react';
+import { listProjects, loadProject, renameProject } from './api/client';
+import { OnboardingView } from './components/features/onboarding/OnboardingView';
 import { Thread, Project } from './types';
+import { useAppStore } from './store/useAppStore';
 
+/**
+ * Main Application Component.
+ * This component acts as the global state container and handles layout routing 
+ * (sidebar, main mindmap/onboarding view) for the AimOS web UI.
+ */
 export default function App() {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeView, setActiveView] = useState<'mindmap' | 'onboarding'>('mindmap');
-  const [workspaceThreads, setWorkspaceThreads] = useState<Thread[] | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoadingProject, setIsLoadingProject] = useState(false);
+  const { 
+    isSidebarCollapsed, setIsSidebarCollapsed,
+    activeView, setActiveView,
+    workspaceThreads, setWorkspaceThreads,
+    projects, setProjects,
+    setIsLoadingProject, updateProject
+  } = useAppStore();
 
+  // Initialize UI by fetching available projects from the CEO backend API
   useEffect(() => {
     listProjects().then(data => {
       if (data.projects) {
@@ -30,9 +39,17 @@ export default function App() {
     }).catch(err => console.error("Failed to list projects:", err));
   }, []);
 
+  /**
+   * Fetches data for a specific project/mission, parses the API thread definitions
+   * into our typed UI layout structure, and displays the execution mindmap graph.
+   * 
+   * @param projectId - the target Project or Root Mission ID
+   */
   const handleSelectProject = async (projectId: string) => {
-    setProjects(prev => prev.map(p => ({ ...p, active: p.id === projectId })));
-    const project = projects.find(p => p.id === projectId);
+    const updatedProjects = projects.map(p => ({ ...p, active: p.id === projectId }));
+    setProjects(updatedProjects);
+    
+    const project = updatedProjects.find(p => p.id === projectId);
     if (!project || !project.rootThreadId) return;
 
     setIsLoadingProject(true);
@@ -71,6 +88,10 @@ export default function App() {
     // Intentionally empty, handled inside MindmapView for zooming
   };
 
+  /**
+   * Finalizes the onboarding flow, appends the generated thread/project
+   * into the global UI state, and flips the viewport back to the map.
+   */
   const handleOnboardingComplete = (newThread?: Thread, projectName?: string) => {
     if (newThread) {
       setWorkspaceThreads([newThread]);
@@ -82,7 +103,8 @@ export default function App() {
         rootThreadId: newThread.id,
       };
 
-      setProjects(prev => prev.map(p => ({ ...p, active: false })).concat(newProject));
+      const deactivatedProjects = projects.map(p => ({ ...p, active: false }));
+      setProjects([...deactivatedProjects, newProject]);
     }
     setActiveView('mindmap');
   };
@@ -110,8 +132,12 @@ export default function App() {
           setIsCollapsed={setIsSidebarCollapsed}
           onCreateProject={() => setActiveView('onboarding')}
           projects={projects}
-          onUpdateProject={(updatedProject) => {
-            setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
+          onUpdateProject={(updatedProj) => {
+            updateProject(updatedProj);
+            renameProject(updatedProj.id, updatedProj.name).catch(err => {
+              console.error('Failed to rename project:', err);
+              // optionally handle reverting local state if API fails
+            });
           }}
           onSelectProject={handleSelectProject}
         />

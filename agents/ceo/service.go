@@ -638,17 +638,23 @@ func fallbackProgramID(threadID string) string {
 }
 
 func fallbackProgramTitle(threadID string, customTitle string) string {
-	if customTitle != "" { return customTitle }
+	if customTitle != "" {
+		return customTitle
+	}
 	return "Program " + threadID
 }
 
 func fallbackMissionTitle(threadID string, customTitle string) string {
-	if customTitle != "" { return customTitle }
+	if customTitle != "" {
+		return customTitle
+	}
 	return "CEO mission " + threadID
 }
 
 func fallbackThreadTitle(threadID string, customTitle string) string {
-	if customTitle != "" { return customTitle }
+	if customTitle != "" {
+		return customTitle
+	}
 	return "CEO thread " + threadID
 }
 
@@ -748,11 +754,8 @@ func trimSentence(value string) string {
 	return trimmed
 }
 
-
-
-
 func (s *Service) GenerateProjectName(ctx context.Context, prompt string) (string, error) {
-	systemPrompt := "You are a naming assistant. Read the user's project description and output exactly 2 or 3 words that represent a catchy, descriptive title for the project. Do NOT include ANY conversation, punctuation, quotes, context, or explanations. NEVER use more than 3 words. ONLY respond with the words themselves."
+	systemPrompt := "You are a naming assistant. Read the user's project description and output a descriptive title for the project, using a maximum of 20 words. Do NOT include ANY conversation, punctuation, quotes, context, or explanations. ONLY respond with the words themselves."
 	title, err := s.llm.Generate(ctx, s.config.Model, systemPrompt, prompt)
 	if err != nil {
 		return "", err
@@ -781,4 +784,42 @@ func (s *Service) LoadProject(ctx context.Context, threadID string) ([]threads.T
 		msgsMap[t.ID] = msgs
 	}
 	return missionThreads, msgsMap, nil
+}
+
+func (s *Service) RenameProject(ctx context.Context, threadID string, newName string) error {
+	// First fetch the thread to ensure it exists and get the mission ID
+	thread, err := s.threadStore.GetThread(threadID)
+	if err != nil {
+		return fmt.Errorf("failed to get thread: %w", err)
+	}
+
+	// Update the thread title
+	if err := s.threadStore.UpdateThreadTitle(threadID, newName); err != nil {
+		return fmt.Errorf("failed to update thread title: %w", err)
+	}
+
+	// Wait, the project root is both a thread and a mission. We should update the mission too.
+	if thread.MissionID != "" {
+		mission, err := s.missionStore.GetMission(thread.MissionID)
+		if err == nil {
+			mission.Title = newName
+			// Keep other fields intact
+			_ = s.missionStore.UpdateMission(mission)
+		}
+	}
+
+	// Append a system message indicating the rename
+	sysMsg := threads.Message{
+		ID:            "msg_" + threadID + "_rename_" + newName,
+		ThreadID:      threadID,
+		Role:          threads.RoleSystem,
+		AuthorAgentID: "system",
+		AuthorRole:    "system",
+		MessageType:   "audit_event",
+		Content:       fmt.Sprintf("Project/Mission renamed to: %s", newName),
+		CreatedAt:     time.Now().UTC(),
+	}
+	_ = s.threadStore.AppendMessage(sysMsg)
+
+	return nil
 }

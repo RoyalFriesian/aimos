@@ -167,7 +167,6 @@ func (s *MemoryStore) UpdateThreadOwner(threadID string, ownerAgentID string) er
 	return nil
 }
 
-
 func (s *MemoryStore) ListRootThreads() ([]Thread, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -181,4 +180,19 @@ func (s *MemoryStore) ListRootThreads() ([]Thread, error) {
 
 	// sort here if needed, omitted for memory store simplicity
 	return results, nil
+}
+func (s *MemoryStore) UpdateThreadTitle(threadID string, title string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	thread, exists := s.threads[threadID]
+	if !exists {
+		return ErrThreadNotFound
+	}
+
+	thread.Title = title
+	thread.UpdatedAt = time.Now().UTC()
+	s.threads[threadID] = thread
+
+	return nil
 }

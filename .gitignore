@@ -26,3 +26,4 @@ cover.out
 *.log
 tmp/node_modules/
 web-ui/dist/
+web-ui/node_modules/

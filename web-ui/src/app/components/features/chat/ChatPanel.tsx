@@ -1,19 +1,28 @@
 import { useState, useRef, useEffect } from 'react';
-import { Thread, Message, Agent } from '../types';
-import { getAgentById } from '../data/mockData';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { ScrollArea } from './ui/scroll-area';
-import { Badge } from './ui/badge';
+import { Thread, Message, Agent } from '../../../types';
+import { getAgentById } from '../../../data/mockData';
+import { Button } from '../../ui/button';
+import { Input } from '../../ui/input';
+import { ScrollArea } from '../../ui/scroll-area';
+import { Badge } from '../../ui/badge';
 import { X, Send, Users, TrendingUp, MessageSquare, Clock, Paperclip, Wrench, CheckCircle2, HardDrive, MoreVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { AgentDetails } from './AgentDetails';
 
+/**
+ * Props for configuring the ChatPanel messaging sliding window.
+ */
 interface ChatPanelProps {
+  /** The actively selected thread containing messages & active agents */
   thread: Thread;
+  /** Function callback triggered to handle the manual closure of the ChatPanel view */
   onClose: () => void;
 }
 
+/**
+ * ChatPanel provides the messaging interface linked to a specific Thread.
+ * It manages message dispatch, thread summary views, and triggers backend CEO API calls.
+ */
 export function ChatPanel({ thread, onClose }: ChatPanelProps) {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>(thread.messages);
@@ -41,7 +50,7 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
     setMessage('');
 
     try {
-      const { sendCEORequest } = await import('../api/client');
+      const { sendCEORequest } = await import('../../../api/client');
       const res = await sendCEORequest({
         prompt: userMessage.content,
         threadId: thread.id, 

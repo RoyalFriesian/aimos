@@ -63,6 +63,10 @@ func (s *observedThreadStore) UpdateThreadMode(threadID string, mode string) err
 	return s.base.UpdateThreadMode(threadID, mode)
 }
 
+func (s *observedThreadStore) UpdateThreadTitle(threadID string, title string) error {
+	return s.base.UpdateThreadTitle(threadID, title)
+}
+
 func (s *observedThreadStore) UpdateThreadOwner(threadID string, ownerAgentID string) error {
 	return s.base.UpdateThreadOwner(threadID, ownerAgentID)
 }

@@ -1,4 +1,4 @@
-import { Agent } from '../types';
+import { Agent } from '../../../types';
 import { X, Cpu, BookOpen, Star } from 'lucide-react';
 
 interface AgentDetailsProps {

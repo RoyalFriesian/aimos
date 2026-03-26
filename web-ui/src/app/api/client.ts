@@ -33,7 +33,7 @@ export async function sendCEORequest(req: CEORequest): Promise<CEOResponse> {
 }
 
 export const generateAIProjectName = async (prompt: string): Promise<string> => {
-  const response = await fetch(`${API_BASE}/generate-project-name`, {
+  const response = await fetch(`${API_BASE}/api/generate-project-name`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -62,5 +62,18 @@ export async function loadProject(threadId: string) {
     body: JSON.stringify({ threadId }),
   });
   if (!response.ok) throw new Error("Failed to load project threads");
+  return response.json();
+}
+
+export async function renameProject(threadId: string, newName: string) {
+  const response = await fetch(`${API_BASE}/api/projects/rename`, {
+    method: 'PATCH', // Or PUT/POST, since we handle all three in server.go
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ threadId, newName }),
+  });
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Failed to rename project: ${response.status} ${errorBody}`);
+  }
   return response.json();
 }

@@ -1,7 +1,7 @@
 import { Handle, Position } from '@xyflow/react';
-import { Thread } from '../types';
+import { Thread } from '../../../types';
 import { Users, MessageSquare, TrendingUp } from 'lucide-react';
-import { Badge } from './ui/badge';
+import { Badge } from '../../ui/badge';
 
 interface ThreadNodeProps {
   data: {

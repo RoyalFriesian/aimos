@@ -17,6 +17,7 @@ type CEOService interface {
 	Respond(ctx context.Context, request ceo.Request) (ceo.ResponseEnvelope, error)
 	SubmitFeedback(ctx context.Context, submission ceo.FeedbackSubmission) (feedback.Record, error)
 	GenerateProjectName(ctx context.Context, prompt string) (string, error)
+	RenameProject(ctx context.Context, threadID string, newName string) error
 	ListRootThreads(ctx context.Context) ([]threads.Thread, error)
 	LoadProject(ctx context.Context, threadID string) ([]threads.Thread, map[string][]threads.Message, error)
 }
@@ -35,6 +36,7 @@ func NewServer(service CEOService) (*Server, error) {
 	mux.HandleFunc("/healthz", server.handleHealthz)
 	mux.HandleFunc("/api/generate-project-name", server.handleGenerateProjectName)
 	mux.HandleFunc("/api/projects", server.handleGetProjects)
+	mux.HandleFunc("/api/projects/rename", server.handleRenameProject)
 	mux.HandleFunc("/api/projects/load", server.handleLoadProject)
 	mux.HandleFunc("/api/ceo/respond", server.handleRespond)
 
@@ -114,7 +116,7 @@ func (s *Server) handleFeedback(writer http.ResponseWriter, request *http.Reques
 func applyCORS(writer http.ResponseWriter) {
 	writer.Header().Set("Access-Control-Allow-Origin", "*")
 	writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 }
 
 func writeJSON(writer http.ResponseWriter, status int, payload any) {
@@ -197,4 +199,28 @@ func (s *Server) handleLoadProject(writer http.ResponseWriter, request *http.Req
 		"threads":  projectThreads,
 		"messages": msgsMap,
 	})
+}
+
+func (s *Server) handleRenameProject(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost && request.Method != http.MethodPut && request.Method != http.MethodPatch {
+		writeError(writer, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var payload struct {
+		ThreadID string `json:"threadId"`
+		NewName  string `json:"newName"`
+	}
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeError(writer, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if payload.ThreadID == "" || payload.NewName == "" {
+		writeError(writer, http.StatusBadRequest, "threadId and newName are required")
+		return
+	}
+	if err := s.service.RenameProject(request.Context(), payload.ThreadID, payload.NewName); err != nil {
+		writeError(writer, statusForError(err), err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"status": "ok"})
 }
