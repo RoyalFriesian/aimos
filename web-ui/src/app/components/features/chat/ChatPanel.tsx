@@ -191,7 +191,19 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6" ref={scrollRef}>
         {messages.map((msg) => {
-          const agent = getAgentById(msg.agentId);
+          let agent = thread.agents?.find(a => a.id === msg.agentId) || getAgentById(msg.agentId);
+          if (!agent && msg.agentId && msg.type !== 'user') {
+            const formatName = (id: string) => id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            agent = {
+              id: msg.agentId,
+              name: formatName(msg.agentId),
+              role: 'AI Agent',
+              avatar: '',
+              model: 'System',
+              expertise: [],
+              systemPrompt: `Dynamic agent instantiated for ${msg.agentId}`
+            };
+          }
           const isUser = msg.type === 'user';
 
           return (
@@ -222,7 +234,7 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
               <div className={`flex-1 flex flex-col max-w-[80%] ${isUser ? 'items-end' : 'items-start'}`}>
                 <div className="flex items-center gap-3 mb-1.5 px-1">
                   <span className={`text-sm font-bold ${isUser ? 'text-purple-400' : 'text-blue-400'}`}>
-                    {isUser ? 'User' : agent?.name || 'Unknown'}
+                    {isUser ? 'You' : agent?.name || 'Unknown'}
                   </span>
                   <span className="text-xs text-gray-600 font-mono flex items-center gap-1">
                     <Clock className="w-3 h-3" />

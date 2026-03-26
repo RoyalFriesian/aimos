@@ -1,0 +1,10 @@
+--- src/app/App.tsx
++++ src/app/App.tsx
+@@ -66,7 +66,7 @@
+             status: t.Status || 'active'
+           },          messages: ((data.messages && data.messages[t.ID]) || []).map((m: any) => ({
+             id: m.ID,
+-            agentId: m.AuthorAgentID === 'user' ? 'user' : 'ceo-agent',
++            agentId: m.AuthorAgentID || 'system',
+             content: m.Content,
+             timestamp: new Date(m.CreatedAt),

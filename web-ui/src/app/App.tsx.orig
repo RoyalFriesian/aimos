@@ -66,7 +66,7 @@ export default function App() {
               status: t.Status || 'active'
             },          messages: ((data.messages && data.messages[t.ID]) || []).map((m: any) => ({
             id: m.ID,
-            agentId: m.AuthorAgentID || 'system',
+            agentId: m.AuthorAgentID === 'user' ? 'user' : 'ceo-agent',
             content: m.Content,
             timestamp: new Date(m.CreatedAt),
             type: (m.AuthorRole === 'user' || m.AuthorRole === 'client' || m.AuthorAgentID === 'user') ? 'user' : 'agent',
