@@ -9,6 +9,7 @@ import (
 	"time"
 
 	aiclients "github.com/Sarnga/agent-platform/ai-clients"
+	"github.com/Sarnga/agent-platform/pkg/attachments"
 	"github.com/Sarnga/agent-platform/pkg/contextpacks"
 	"github.com/Sarnga/agent-platform/pkg/execution"
 	"github.com/Sarnga/agent-platform/pkg/feedback"
@@ -27,6 +28,7 @@ type Service struct {
 	threadStore         threads.Store
 	missionStateStore   missionstate.Store
 	feedbackStore       feedback.Store
+	attachmentStore     attachments.Store
 	contextBuilder      *contextpacks.Builder
 	executionRuntime    *execution.Runtime
 	timerProcessor      *execution.TimerProcessor
@@ -47,7 +49,7 @@ type contextEnvelope struct {
 	MissionID string `json:"missionId,omitempty"`
 }
 
-func NewService(config Config, llm CompletionClient, missionStore missions.Store, threadStore threads.Store, missionStateStore missionstate.Store, executionStore execution.Store, feedbackStore feedback.Store) (*Service, error) {
+func NewService(config Config, llm CompletionClient, missionStore missions.Store, threadStore threads.Store, missionStateStore missionstate.Store, executionStore execution.Store, feedbackStore feedback.Store, attachmentStore attachments.Store) (*Service, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -77,7 +79,7 @@ func NewService(config Config, llm CompletionClient, missionStore missions.Store
 	if err != nil {
 		return nil, logValidationError("invalid CEO service", err)
 	}
-	contextBuilder, err := contextpacks.NewBuilder(missionStore, observedThreadStore, missionStateStore, executionStore)
+	contextBuilder, err := contextpacks.NewBuilder(missionStore, observedThreadStore, missionStateStore, executionStore, attachmentStore)
 	if err != nil {
 		return nil, logValidationError("invalid CEO service", err)
 	}
@@ -100,6 +102,7 @@ func NewService(config Config, llm CompletionClient, missionStore missions.Store
 		threadStore:         observedThreadStore,
 		missionStateStore:   missionStateStore,
 		feedbackStore:       feedbackStore,
+		attachmentStore:     attachmentStore,
 		contextBuilder:      contextBuilder,
 		executionRuntime:    executionRuntime,
 		missionRuntime:      missionRuntime,
@@ -125,7 +128,7 @@ func NewServiceFromEnv(envFile string) (*Service, error) {
 	service, err := NewService(config, aiclients.NewOpenAIClient(aiclients.OpenAIConfig{
 		APIKey:  config.APIKey,
 		BaseURL: config.BaseURL,
-	}, logger), stores.Missions, stores.Threads, stores.MissionState, stores.Execution, stores.Feedback)
+	}, logger), stores.Missions, stores.Threads, stores.MissionState, stores.Execution, stores.Feedback, stores.Attachments)
 	if err != nil {
 		stores.Close()
 		return nil, err
@@ -450,7 +453,11 @@ func (s *Service) buildConversation(mode Mode, prompt string, pack contextpacks.
 		threads.Message{Role: threads.RoleSystem, Content: formatContextPack(pack)},
 	)
 	conversation = append(conversation, pack.RecentMessages...)
-	conversation = append(conversation, threads.Message{Role: threads.RoleUser, Content: prompt, Mode: string(mode)})
+	userMsg := threads.Message{Role: threads.RoleUser, Content: prompt, Mode: string(mode)}
+	if len(pack.ImageDataURLs) > 0 {
+		userMsg.ImageDataURLs = pack.ImageDataURLs
+	}
+	conversation = append(conversation, userMsg)
 	return conversation, nil
 }
 
@@ -524,6 +531,40 @@ func formatContextPack(pack contextpacks.ContextPack) string {
 		}
 	} else {
 		builder.WriteString("Due Timers:\n- none due\n")
+	}
+
+	if len(pack.AttachmentContents) > 0 {
+		totalTokens := 0
+		for _, ac := range pack.AttachmentContents {
+			totalTokens += ac.Tokens
+		}
+		builder.WriteString(fmt.Sprintf("Project Attachments (%d files, ~%d tokens):\n", len(pack.AttachmentContents), totalTokens))
+		for _, ac := range pack.AttachmentContents {
+			truncNote := ""
+			if ac.Truncated {
+				truncNote = " [truncated at token budget]"
+			}
+			builder.WriteString(fmt.Sprintf("--- %s (%s, ~%d tokens)%s ---\n", ac.Filename, ac.Category, ac.Tokens, truncNote))
+			builder.WriteString(ac.Content)
+			if len(ac.Content) > 0 && ac.Content[len(ac.Content)-1] != '\n' {
+				builder.WriteString("\n")
+			}
+			builder.WriteString("--- end ---\n")
+		}
+		// Note image attachments that are not injected as text.
+		imageCount := 0
+		for _, att := range pack.Attachments {
+			if att.FileCategory == "image" {
+				imageCount++
+			}
+		}
+		if imageCount > 0 {
+			builder.WriteString(fmt.Sprintf("Image Attachments: %d (included via multimodal input when supported)\n", imageCount))
+		}
+	} else if len(pack.Attachments) > 0 {
+		builder.WriteString(fmt.Sprintf("Project Attachments: %d registered (no text-injectable files)\n", len(pack.Attachments)))
+	} else {
+		builder.WriteString("Project Attachments: none\n")
 	}
 
 	builder.WriteString(fmt.Sprintf("Recent Messages Window: %d\n", len(pack.RecentMessages)))

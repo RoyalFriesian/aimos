@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Sarnga/agent-platform/pkg/attachments"
 	"github.com/Sarnga/agent-platform/pkg/execution"
 	"github.com/Sarnga/agent-platform/pkg/feedback"
 	"github.com/Sarnga/agent-platform/pkg/missions"
@@ -19,6 +20,7 @@ type Stores struct {
 	MissionState missionstate.Store
 	Execution    execution.Store
 	Feedback     feedback.Store
+	Attachments  attachments.Store
 }
 
 func OpenStores(ctx context.Context, config Config) (*Stores, error) {
@@ -51,6 +53,11 @@ func OpenStores(ctx context.Context, config Config) (*Stores, error) {
 		pool.Close()
 		return nil, fmt.Errorf("create feedback store: %w", err)
 	}
+	attachmentStore, err := attachments.NewPostgresStore(pool)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("create attachment store: %w", err)
+	}
 	return &Stores{
 		Pool:         pool,
 		Missions:     missionStore,
@@ -58,6 +65,7 @@ func OpenStores(ctx context.Context, config Config) (*Stores, error) {
 		MissionState: missionStateStore,
 		Execution:    executionStore,
 		Feedback:     feedbackStore,
+		Attachments:  attachmentStore,
 	}, nil
 }
 

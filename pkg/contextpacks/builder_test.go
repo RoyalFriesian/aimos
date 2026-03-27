@@ -16,16 +16,16 @@ func TestNewBuilderRequiresAllStores(t *testing.T) {
 	missionStateStore := missionstate.NewMemoryStore()
 	executionStore := execution.NewMemoryStore()
 
-	if _, err := NewBuilder(nil, threadStore, missionStateStore, executionStore); err == nil {
+	if _, err := NewBuilder(nil, threadStore, missionStateStore, executionStore, nil); err == nil {
 		t.Fatal("expected mission store requirement error")
 	}
-	if _, err := NewBuilder(missionStore, nil, missionStateStore, executionStore); err == nil {
+	if _, err := NewBuilder(missionStore, nil, missionStateStore, executionStore, nil); err == nil {
 		t.Fatal("expected thread store requirement error")
 	}
-	if _, err := NewBuilder(missionStore, threadStore, nil, executionStore); err == nil {
+	if _, err := NewBuilder(missionStore, threadStore, nil, executionStore, nil); err == nil {
 		t.Fatal("expected mission state store requirement error")
 	}
-	if _, err := NewBuilder(missionStore, threadStore, missionStateStore, nil); err == nil {
+	if _, err := NewBuilder(missionStore, threadStore, missionStateStore, nil, nil); err == nil {
 		t.Fatal("expected execution store requirement error")
 	}
 }
@@ -35,7 +35,7 @@ func TestBuildRootCEOPackIncludesSummaryRollupsAndRecentMessages(t *testing.T) {
 	threadStore := threads.NewMemoryStore()
 	missionStateStore := missionstate.NewMemoryStore()
 	executionStore := execution.NewMemoryStore()
-	builder, err := NewBuilder(missionStore, threadStore, missionStateStore, executionStore)
+	builder, err := NewBuilder(missionStore, threadStore, missionStateStore, executionStore, nil)
 	if err != nil {
 		t.Fatalf("NewBuilder returned error: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestBuildMissionPackUsesOwningThreadWhenThreadIDMissing(t *testing.T) {
 	threadStore := threads.NewMemoryStore()
 	missionStateStore := missionstate.NewMemoryStore()
 	executionStore := execution.NewMemoryStore()
-	builder, err := NewBuilder(missionStore, threadStore, missionStateStore, executionStore)
+	builder, err := NewBuilder(missionStore, threadStore, missionStateStore, executionStore, nil)
 	if err != nil {
 		t.Fatalf("NewBuilder returned error: %v", err)
 	}

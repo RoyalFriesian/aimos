@@ -9,6 +9,20 @@ import { OnboardingView } from './components/features/onboarding/OnboardingView'
 import { Thread, Project } from './types';
 import { useAppStore } from './store/useAppStore';
 
+function parseMessageContentJSON(raw: unknown): unknown {
+  if (!raw) {
+    return null;
+  }
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw;
+}
+
 /**
  * Main Application Component.
  * This component acts as the global state container and handles layout routing 
@@ -59,17 +73,21 @@ export default function App() {
         const parsedThreads = data.threads.map((t: any) => ({
           id: t.ID,
           title: t.Title || 'Thread',
-          agents: [{ id: 'ceo-agent', name: 'CEO Agent', role: 'CEO', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ceo', expertise: [] }],            stats: {
+          agents: [{ id: 'ceo-agent', name: 'CEO Agent', role: 'CEO', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ceo', expertise: [] }],
+          stats: {
               totalMessages: ((data.messages && data.messages[t.ID]) || []).length,
               activeAgents: 1,
               progress: t.Status === 'completed' ? 100 : 50,
               status: t.Status || 'active'
-            },          messages: ((data.messages && data.messages[t.ID]) || []).map((m: any) => ({
+          },
+          messages: ((data.messages && data.messages[t.ID]) || []).map((m: any) => ({
             id: m.ID,
             agentId: m.AuthorAgentID || 'system',
             content: m.Content,
             timestamp: new Date(m.CreatedAt),
             type: (m.AuthorRole === 'user' || m.AuthorRole === 'client' || m.AuthorAgentID === 'user') ? 'user' : 'agent',
+            messageType: m.MessageType,
+            contentJson: parseMessageContentJSON(m.ContentJSON),
           })).sort((a: any, b: any) => a.timestamp.getTime() - b.timestamp.getTime()),
           parentId: t.ParentThreadID || null,
           childIds: data.threads.filter((child: any) => child.ParentThreadID === t.ID).map((child: any) => child.ID)

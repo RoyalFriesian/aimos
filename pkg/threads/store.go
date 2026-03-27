@@ -77,6 +77,9 @@ type Message struct {
 	Mode             string
 	ReplyToMessageID string
 	CreatedAt        time.Time
+	// ImageDataURLs holds base64 data URLs for multimodal LLM input.
+	// This field is transient and not persisted to the database.
+	ImageDataURLs []string `json:"-"`
 }
 
 type ReusableThreadMatch struct {

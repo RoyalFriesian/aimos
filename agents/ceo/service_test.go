@@ -65,6 +65,7 @@ func newTestService(t *testing.T, stub *stubCompletionClient) (*Service, *missio
 		missionStateStore,
 		executionStore,
 		feedbackStore,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("NewService returned error: %v", err)
@@ -1710,19 +1711,19 @@ func TestNewServiceRequiresExplicitStore(t *testing.T) {
 	executionStore := execution.NewMemoryStore()
 	feedbackStore := feedback.NewMemoryStore()
 
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, nil, threadStore, missionStateStore, executionStore, feedbackStore); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, nil, threadStore, missionStateStore, executionStore, feedbackStore, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit mission store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, nil, missionStateStore, executionStore, feedbackStore); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, nil, missionStateStore, executionStore, feedbackStore, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit thread store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, nil, executionStore, feedbackStore); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, nil, executionStore, feedbackStore, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit mission state store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, nil, feedbackStore); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, nil, feedbackStore, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit execution store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, executionStore, nil); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, executionStore, nil, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit feedback store")
 	}
 }

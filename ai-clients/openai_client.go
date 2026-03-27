@@ -10,6 +10,7 @@ import (
 	"github.com/Sarnga/agent-platform/pkg/threads"
 	openai "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
 )
 
@@ -53,10 +54,17 @@ func (c *OpenAIClient) GenerateFromMessages(ctx context.Context, model string, m
 	input := make(responses.ResponseInputParam, 0, len(messages))
 	for _, msg := range messages {
 		content := strings.TrimSpace(msg.Content)
-		if content == "" {
+		if content == "" && len(msg.ImageDataURLs) == 0 {
 			continue
 		}
-		input = append(input, responses.ResponseInputItemParamOfMessage(content, roleToOpenAI(msg.Role)))
+
+		if len(msg.ImageDataURLs) > 0 {
+			// Build multimodal content parts (text + images).
+			parts := buildMultimodalParts(content, msg.ImageDataURLs)
+			input = append(input, responses.ResponseInputItemParamOfMessage(parts, roleToOpenAI(msg.Role)))
+		} else {
+			input = append(input, responses.ResponseInputItemParamOfMessage(content, roleToOpenAI(msg.Role)))
+		}
 	}
 	if len(input) == 0 {
 		return "", errors.New("no non-empty messages provided")
@@ -77,6 +85,27 @@ func (c *OpenAIClient) GenerateFromMessages(ctx context.Context, model string, m
 		return "", errors.New("empty response content returned from OpenAI")
 	}
 	return content, nil
+}
+
+// buildMultimodalParts constructs a content list with a text part followed by image parts.
+func buildMultimodalParts(text string, imageDataURLs []string) responses.ResponseInputMessageContentListParam {
+	parts := make(responses.ResponseInputMessageContentListParam, 0, 1+len(imageDataURLs))
+	if text != "" {
+		parts = append(parts, responses.ResponseInputContentUnionParam{
+			OfInputText: &responses.ResponseInputTextParam{
+				Text: text,
+			},
+		})
+	}
+	for _, dataURL := range imageDataURLs {
+		parts = append(parts, responses.ResponseInputContentUnionParam{
+			OfInputImage: &responses.ResponseInputImageParam{
+				ImageURL: param.NewOpt(dataURL),
+				Detail:   responses.ResponseInputImageDetailAuto,
+			},
+		})
+	}
+	return parts
 }
 
 func roleToOpenAI(role threads.Role) responses.EasyInputMessageRole {

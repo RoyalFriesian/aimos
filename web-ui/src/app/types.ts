@@ -32,6 +32,10 @@ export interface Message {
   timestamp: Date;
   /** Identifies whether this is a user instruction or agent response */
   type: 'user' | 'agent';
+  /** Backend message type for rendering specialized timeline cards */
+  messageType?: string;
+  /** Optional structured JSON payload emitted by backend events */
+  contentJson?: unknown;
 }
 
 /**
@@ -83,4 +87,98 @@ export interface Thread {
   childIds: string[];
   /** Optional ID of the primary agent responsible for this thread */
   assignedAgent?: string;
+}
+
+// ---------------------------------------------------------------------------
+// CEO structured response payload types (one per conversation mode)
+// ---------------------------------------------------------------------------
+
+export type CEOMode =
+  | 'discovery'
+  | 'alignment'
+  | 'high_level_plan'
+  | 'roadmap'
+  | 'execution_prep'
+  | 'review';
+
+/** Common fields present on every CEO structured payload. */
+interface CEOPayloadBase {
+  mode: CEOMode;
+  model?: string;
+  message: string;
+}
+
+/** Phased ambition level (object form returned by discovery mode). */
+export interface AmbitionLevel {
+  recommended: string;
+  why: string[];
+  possiblePhases: string[];
+}
+
+export interface CEODiscoveryPayload extends CEOPayloadBase {
+  mode: 'discovery';
+  assumptions: string[];
+  gaps: string[];
+  accessNeeds: string[];
+  ambitionLevel: string | AmbitionLevel;
+  successCriteria: string[];
+  nextQuestions: string[];
+}
+
+export interface CEOAlignmentPayload extends CEOPayloadBase {
+  mode: 'alignment';
+  recommendedScopePosture: string;
+  tradeoffs: string[];
+  decisionPoints: string[];
+  accessNeeds: string[];
+  risks: string[];
+  nextActions: string[];
+}
+
+export interface CEOHighLevelPlanPayload extends CEOPayloadBase {
+  mode: 'high_level_plan';
+  vision: string;
+  value: string;
+  accessNeeds: string[];
+  workstreams: string[];
+  risks: string[];
+  stagePlan: string[];
+  assumptions: string[];
+  decisionNeeds: string[];
+}
+
+export interface CEOGenericPayload extends CEOPayloadBase {
+  [key: string]: unknown;
+}
+
+/** Discriminated union of all CEO response payload shapes. */
+export type CEOResponsePayload =
+  | CEODiscoveryPayload
+  | CEOAlignmentPayload
+  | CEOHighLevelPlanPayload
+  | CEOGenericPayload;
+
+// ---------------------------------------------------------------------------
+// Type guards
+// ---------------------------------------------------------------------------
+
+export function isDiscoveryPayload(p: CEOResponsePayload): p is CEODiscoveryPayload {
+  return p.mode === 'discovery';
+}
+
+export function isAlignmentPayload(p: CEOResponsePayload): p is CEOAlignmentPayload {
+  return p.mode === 'alignment';
+}
+
+export function isHighLevelPlanPayload(p: CEOResponsePayload): p is CEOHighLevelPlanPayload {
+  return p.mode === 'high_level_plan';
+}
+
+/** Attempt to coerce an unknown payload into a typed CEO response. */
+export function parseCEOPayload(raw: unknown): CEOResponsePayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.message !== 'string' || !obj.message) return null;
+  const mode = (typeof obj.mode === 'string' ? obj.mode : 'discovery') as CEOMode;
+  return { ...obj, mode, message: obj.message } as CEOResponsePayload;
 }

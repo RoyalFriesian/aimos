@@ -27,3 +27,7 @@ cover.out
 tmp/node_modules/
 web-ui/dist/
 web-ui/node_modules/
+
+# Knowledge base storage
+aimos-knowledge-base/
+.aimos-knowledge/

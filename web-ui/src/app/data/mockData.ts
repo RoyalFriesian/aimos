@@ -75,13 +75,153 @@ export const mockAgents: Agent[] = [
   },
 ];
 
-const createMessage = (agentId: string, content: string, minutesAgo: number): Message => ({
+const createMessage = (agentId: string, content: string, minutesAgo: number, extra?: Partial<Message>): Message => ({
   id: `msg-${Date.now()}-${Math.random()}`,
   agentId,
   content,
   timestamp: new Date(Date.now() - minutesAgo * 60000),
   type: 'agent',
+  ...extra,
 });
+
+// ---------------------------------------------------------------------------
+// Example structured CEO payloads (one per mode) for visual testing
+// ---------------------------------------------------------------------------
+
+const discoveryPayload = {
+  mode: 'discovery',
+  model: 'gpt-5.4',
+  message: `Good starting point, but **"CRM for school"** is too broad to responsibly scope or build yet.\n\nBefore we commit to architecture or implementation, we should clarify the **narrow business wedge** first:\n- who the primary user is\n- what workflow is currently broken\n- what outcome this system must improve in the next 30–90 days\n\n> My recommendation: define the **first customer** and **first workflow** before discussing full CRM scope.\n\nFor example, is this primarily for admissions lead management, parent/student communication, fee follow-up, counselor workflows, or full school operations? A focused wedge will determine whether this is a lightweight lead pipeline, a student lifecycle system, or an operations platform.`,
+  assumptions: [
+    'You want to build software from the local project folder provided.',
+    'This is likely a custom web application rather than a no-code configuration request.',
+    'The term "CRM" may mean student/parent relationship management, not a generic sales CRM.',
+    'You have not yet provided product requirements, existing codebase details, or target users.',
+  ],
+  gaps: [
+    'Primary user is unclear: admissions staff, front office, teachers, principal, finance team, counselors, or management.',
+    'Core use case is unclear: lead capture, inquiry management, admissions pipeline, student records, communication, attendance, fees, alumni, or all of the above.',
+    'Success metric is undefined: reduced manual work, faster admissions follow-up, better conversion, centralized data, reporting, etc.',
+    'No timeline provided: prototype this week, MVP this month, or production deployment later.',
+    'No constraints provided: budget, compliance, team size, tech stack preference, hosting requirements, or integration constraints.',
+    'Unknown trust boundary: internal school tool for one school, multi-school SaaS, or white-label product.',
+    'Unknown data model and source systems: spreadsheets, existing ERP, forms, WhatsApp, email, website inquiries, etc.',
+  ],
+  accessNeeds: [
+    'Access to the repository or a file listing from the project folder.',
+    'Current product artifacts if they exist: README, package files, screenshots, wireframes, or requirements docs.',
+    'Example data sources: inquiry forms, spreadsheets, admission records, student data samples.',
+    'List of intended users and stakeholders who will use or approve the system.',
+    'Any existing systems that must integrate: website forms, email, SMS, WhatsApp, payment systems, SIS/ERP, Google Sheets, etc.',
+  ],
+  ambitionLevel: {
+    recommended: 'Start with a narrow MVP wedge',
+    why: [
+      'School CRM can easily expand into SIS/ERP territory and become too broad.',
+      'A focused admissions or inquiry-management workflow can deliver value quickly.',
+      'Early clarity on one user and one workflow will reduce rework in product and architecture.',
+    ],
+    possiblePhases: [
+      'Phase 1: Inquiry/admissions CRM',
+      'Phase 2: Parent/student communication and follow-up automation',
+      'Phase 3: Reporting, fees, and student lifecycle extensions',
+      'Phase 4: Multi-campus or multi-school capabilities if needed',
+    ],
+  },
+  successCriteria: [
+    'A clearly defined first user persona and first workflow.',
+    'An agreed MVP scope with must-have versus later features.',
+    'A known deployment model: single school internal tool or broader platform.',
+    'A validated list of integrations and data sources.',
+    'A build plan that matches timeline, codebase reality, and available access.',
+  ],
+  nextQuestions: [
+    'Who is the primary user for version 1: admissions team, admin staff, principal, teachers, or finance?',
+    'What is the single most important workflow to fix first?',
+    'Is this for one school or a product for multiple schools?',
+    'What must the MVP do in the first release? List the top 3–5 actions.',
+    'What is your target timeline: prototype, MVP, or production?',
+    'What channels matter on day 1: web forms, email, SMS, WhatsApp?',
+    'Are there compliance or privacy requirements for student data?',
+  ],
+};
+
+const alignmentPayload = {
+  mode: 'alignment',
+  model: 'gpt-5.4',
+  message: `Based on your answers, I recommend we converge on a **single-school admissions inquiry pipeline** as the v1 wedge.\n\nThis is the *highest-value, lowest-risk* starting point because:\n1. It focuses on **one user** (admissions coordinator) and **one workflow** (inquiry → follow-up → enrollment decision)\n2. It does not require integration with finance, attendance, or student management yet\n3. It can be delivered as a **standalone web app** in 2–4 weeks\n\nThe alternative — building a full student lifecycle CRM — would take 3–6 months and risk delivering nothing useful in the first month.`,
+  recommendedScopePosture: 'Narrow MVP: single-school admissions inquiry pipeline with web dashboard and basic follow-up automation.',
+  tradeoffs: [
+    'Narrow scope means parents and teachers will NOT have accounts in v1 — only admissions staff.',
+    'No fee tracking or attendance in v1 — these are Phase 2+ features.',
+    'WhatsApp integration is high-effort and can be deferred to Phase 2 without blocking v1 value.',
+    'Choosing a standalone web app means no mobile app initially, but the responsive web UI covers basic mobile use cases.',
+  ],
+  decisionPoints: [
+    'Do you agree to scope v1 to admissions inquiries only?',
+    'Should the system send follow-up reminders via email, SMS, or both?',
+    'Should we build multi-school support into the data model now (even if UI is single-school)?',
+    'Should admissions stages be configurable by the school or fixed for v1?',
+  ],
+  accessNeeds: [
+    'Confirm the tech stack: React + Go backend or another preference.',
+    'Access to a sample admissions inquiry spreadsheet or form.',
+    'Access to the school\'s email/SMS provider credentials if automated follow-ups are in scope.',
+  ],
+  risks: [
+    'Scope creep: stakeholders may push for "just add fees" before v1 ships.',
+    'Data migration: if existing inquiry data lives in spreadsheets, import tooling will be needed.',
+    'Adoption risk: admissions staff may need training to switch from spreadsheets to a new system.',
+  ],
+  nextActions: [
+    'Finalize v1 scope agreement (admissions inquiry pipeline only).',
+    'Create a high-level plan with workstreams and staged milestones.',
+    'Set up the project repository and initial backend/frontend scaffolding.',
+  ],
+};
+
+const planPayload = {
+  mode: 'high_level_plan',
+  model: 'gpt-5.4',
+  message: `Here is the **high-level plan** for the School Admissions CRM v1.\n\nThis plan delivers a working admissions inquiry pipeline in **4 weeks** with a clear path to Phase 2 extensions. Every workstream has a defined owner, deliverable, and acceptance criteria.`,
+  vision: 'A focused, fast, and reliable admissions inquiry management system that replaces spreadsheets and manual follow-up with a structured digital pipeline — starting with one school and one workflow.',
+  value: 'Admissions staff save 5–10 hours per week on manual tracking, never lose an inquiry, and can see pipeline health in real time. School leadership gets a single dashboard instead of asking for status updates.',
+  accessNeeds: [
+    'Repository access for project scaffolding.',
+    'PostgreSQL instance or managed database for inquiry storage.',
+    'Email provider API (e.g. SendGrid, AWS SES) for automated follow-ups.',
+    'Deployment target: Vercel/Railway/VPS or school-hosted server.',
+  ],
+  workstreams: [
+    'Inquiry Pipeline Backend: inquiry CRUD, stage transitions, follow-up scheduling, REST API.',
+    'Admissions Dashboard UI: inquiry list, stage board (Kanban), inquiry detail, search/filter.',
+    'Follow-up Automation: email reminders at configurable intervals per stage.',
+    'Reporting: pipeline summary, conversion funnel, stage duration analytics.',
+    'Deployment & Ops: CI/CD, database migrations, environment config, monitoring.',
+  ],
+  risks: [
+    'Scope creep from stakeholders requesting fee or attendance features before v1 ships.',
+    'Email deliverability issues if the school domain lacks proper SPF/DKIM setup.',
+    'Data accuracy: garbage-in from manual entry without validation will reduce dashboard value.',
+  ],
+  stagePlan: [
+    'Week 1: Project scaffolding, database schema, inquiry CRUD API, basic auth.',
+    'Week 2: Dashboard UI — inquiry list, Kanban board, inquiry detail view.',
+    'Week 3: Follow-up automation, email integration, notification preferences.',
+    'Week 4: Reporting dashboard, polish, deployment, user acceptance testing.',
+  ],
+  assumptions: [
+    'Single-school deployment to start; multi-school is deferred to Phase 2.',
+    'English language UI; localization is not in scope for v1.',
+    'Maximum 5,000 inquiries per year (low volume, can use simple pagination).',
+    'Admissions staff are comfortable with web browsers and email.',
+  ],
+  decisionNeeds: [
+    'Confirm the database choice: PostgreSQL or another preference.',
+    'Confirm the deployment target before week 1 ends.',
+    'Decide whether SMS follow-ups are in scope for v1 or deferred.',
+  ],
+};
 
 export const mockThreads: Thread[] = [
   {
@@ -89,12 +229,42 @@ export const mockThreads: Thread[] = [
     title: 'CEO Strategy Hub',
     agents: [mockAgents[0]],
     messages: [
-      createMessage('ceo', 'Welcome to the strategic planning hub. Let\'s coordinate our Q2 initiatives.', 120),
-      createMessage('ceo', 'I\'ve created sub-threads for Product, Engineering, and Marketing teams.', 115),
-      createMessage('ceo', 'Each team should outline their quarterly objectives and resource needs.', 110),
+      {
+        id: 'msg-user-crm',
+        agentId: 'user',
+        content: 'Build me a CRM for school',
+        timestamp: new Date(Date.now() - 130 * 60000),
+        type: 'user',
+      },
+      createMessage('ceo', discoveryPayload.message, 120, {
+        messageType: 'discovery',
+        contentJson: discoveryPayload,
+      }),
+      {
+        id: 'msg-user-reply',
+        agentId: 'user',
+        content: 'The primary user is the admissions coordinator. We want to track inquiries from web forms and WhatsApp, and automate follow-up reminders. Single school for now. Timeline: working MVP in 4 weeks.',
+        timestamp: new Date(Date.now() - 110 * 60000),
+        type: 'user',
+      },
+      createMessage('ceo', alignmentPayload.message, 105, {
+        messageType: 'alignment',
+        contentJson: alignmentPayload,
+      }),
+      {
+        id: 'msg-user-agree',
+        agentId: 'user',
+        content: 'Yes, let\'s go with the admissions inquiry pipeline. Defer WhatsApp and SMS to Phase 2. Email follow-ups only for v1. React + Go backend is fine. Create the plan.',
+        timestamp: new Date(Date.now() - 95 * 60000),
+        type: 'user',
+      },
+      createMessage('ceo', planPayload.message, 90, {
+        messageType: 'high_level_plan',
+        contentJson: planPayload,
+      }),
     ],
     stats: {
-      totalMessages: 3,
+      totalMessages: 6,
       activeAgents: 1,
       progress: 15,
       status: 'active',
