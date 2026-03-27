@@ -22,11 +22,11 @@ const defaultMaxImageAttachments = 5
 const maxImageFileSize = 20 * 1024 * 1024 // 20 MB
 
 type BuildOptions struct {
-	RecentMessagesLimit    int
-	IncludeChildRollups    bool
-	AttachmentTokenBudget  int
-	MaxSingleFileTokens    int
-	MaxImageAttachments    int
+	RecentMessagesLimit   int
+	IncludeChildRollups   bool
+	AttachmentTokenBudget int
+	MaxSingleFileTokens   int
+	MaxImageAttachments   int
 }
 
 // AttachmentContent holds the loaded text content of a single text-injectable attachment.

@@ -154,18 +154,18 @@ func (s *Service) UploadProjectAttachments(ctx context.Context, threadID string,
 
 		if s.attachmentStore != nil {
 			if regErr := s.attachmentStore.Create(attachments.Attachment{
-				ID:           fmt.Sprintf("att-%s-%d-%d", threadID, now.UnixNano(), idx),
-				MissionID:    missionID,
-				ThreadID:     threadID,
-				Filename:     resolvedName,
-				ContentType:  contentType,
-				SizeBytes:    fileSize,
-				RelativePath: relPath,
-				AbsolutePath: absolutePath,
-				FileCategory: category,
+				ID:            fmt.Sprintf("att-%s-%d-%d", threadID, now.UnixNano(), idx),
+				MissionID:     missionID,
+				ThreadID:      threadID,
+				Filename:      resolvedName,
+				ContentType:   contentType,
+				SizeBytes:     fileSize,
+				RelativePath:  relPath,
+				AbsolutePath:  absolutePath,
+				FileCategory:  category,
 				TokenEstimate: attachments.EstimateTokens(fileSize, category),
-				Status:       attachments.StatusActive,
-				CreatedAt:    now,
+				Status:        attachments.StatusActive,
+				CreatedAt:     now,
 			}); regErr != nil {
 				return nil, fmt.Errorf("register attachment %q: %w", resolvedName, regErr)
 			}
