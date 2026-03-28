@@ -284,7 +284,7 @@ func (s *Service) Respond(ctx context.Context, request Request) (ResponseEnvelop
 			return ResponseEnvelope{}, err
 		}
 	} else {
-		conversation, err := s.buildConversation(mode, request.Prompt, contextPack)
+		conversation, err := s.buildConversation(mode, request.Prompt, contextPack, request.KnowledgeSummary)
 		if err != nil {
 			return ResponseEnvelope{}, err
 		}
@@ -441,17 +441,23 @@ func (s *Service) ensureConversationGraph(threadID string, customTitle string) (
 	return thread, nil
 }
 
-func (s *Service) buildConversation(mode Mode, prompt string, pack contextpacks.ContextPack) ([]threads.Message, error) {
+func (s *Service) buildConversation(mode Mode, prompt string, pack contextpacks.ContextPack, knowledgeSummary string) ([]threads.Message, error) {
 	systemPrompt, err := loadSystemPrompt(mode)
 	if err != nil {
 		return nil, err
 	}
 
-	conversation := make([]threads.Message, 0, len(pack.RecentMessages)+3)
+	conversation := make([]threads.Message, 0, len(pack.RecentMessages)+4)
 	conversation = append(conversation,
 		threads.Message{Role: threads.RoleSystem, Content: systemPrompt},
 		threads.Message{Role: threads.RoleSystem, Content: formatContextPack(pack)},
 	)
+	if knowledgeSummary != "" {
+		conversation = append(conversation, threads.Message{
+			Role:    threads.RoleSystem,
+			Content: knowledgeSummary,
+		})
+	}
 	conversation = append(conversation, pack.RecentMessages...)
 	userMsg := threads.Message{Role: threads.RoleUser, Content: prompt, Mode: string(mode)}
 	if len(pack.ImageDataURLs) > 0 {
@@ -863,4 +869,82 @@ func (s *Service) RenameProject(ctx context.Context, threadID string, newName st
 	_ = s.threadStore.AppendMessage(sysMsg)
 
 	return nil
+}
+
+// RefinePrompt takes a raw user project description and returns a refined,
+// structured version using a low-cost reasoning model.
+func (s *Service) RefinePrompt(ctx context.Context, rawPrompt string, model string) (string, error) {
+	if strings.TrimSpace(rawPrompt) == "" {
+		return "", fmt.Errorf("prompt is required")
+	}
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+
+	systemPrompt := `You are an expert product consultant who helps clients articulate their project vision clearly.
+
+The user has described a project idea. Your job is to refine their description into a clear, well-structured project brief that a CEO agent can act on effectively.
+
+Rules:
+- Preserve the user's core intent and all specific details they mentioned
+- Add structure: break into clear sections if needed (Goal, Key Features, Target Users, Technical Preferences, Constraints)
+- Clarify ambiguous points by making reasonable assumptions (mark them as assumptions)
+- Remove filler words and tighten the language
+- Do NOT add features or scope the user didn't mention or imply
+- Do NOT use markdown headers or bullet formatting — write in clean flowing paragraphs with line breaks between sections
+- Keep it concise but comprehensive
+- Write in second person ("Your project will..." or "The system should...")
+
+Output ONLY the refined project description. No preamble, no commentary.`
+
+	refined, err := s.llm.Generate(ctx, model, systemPrompt, rawPrompt)
+	if err != nil {
+		return "", fmt.Errorf("refine prompt: %w", err)
+	}
+	return strings.TrimSpace(refined), nil
+}
+
+// ModelGuidance analyzes the project description and available models to
+// recommend which model best suits the project type.
+func (s *Service) ModelGuidance(ctx context.Context, projectDescription string, availableModels []string, model string) (string, error) {
+	if strings.TrimSpace(projectDescription) == "" {
+		return "", fmt.Errorf("project description is required")
+	}
+	if model == "" {
+		model = s.config.Model
+	}
+
+	modelsText := strings.Join(availableModels, ", ")
+
+	systemPrompt := `You are an expert AI model advisor. The user is about to start a new software project with an AI CEO agent that will plan and execute the project.
+
+Your job: Based on the project description, recommend which LLM model should power the CEO agent.
+
+Available models: ` + modelsText + `
+
+Provide your guidance in this exact JSON format (no markdown, no code fences):
+{
+  "recommended": "model-name",
+  "reasoning": "2-3 sentence explanation of why this model fits the project",
+  "alternatives": [
+    {"model": "model-name", "note": "when to prefer this instead"}
+  ],
+  "projectComplexity": "low|medium|high|very_high",
+  "tips": ["brief tip about model choice for this project type"]
+}
+
+Model selection heuristics:
+- Complex architecture, multi-service, or enterprise projects → strongest reasoning model (gpt-5.4, o3, o4-mini)
+- Standard web apps, CRUD, or well-defined scope → balanced model (gpt-4.1, gpt-4o)
+- Simple scripts, prototypes, or experiments → fast cheap model (gpt-4o-mini, gpt-4.1-mini)
+- Projects requiring deep code generation → code-optimized models when available
+- When in doubt, recommend the strongest model the user has access to
+
+Output ONLY valid JSON. No explanation outside the JSON.`
+
+	guidance, err := s.llm.Generate(ctx, model, systemPrompt, projectDescription)
+	if err != nil {
+		return "", fmt.Errorf("model guidance: %w", err)
+	}
+	return strings.TrimSpace(guidance), nil
 }

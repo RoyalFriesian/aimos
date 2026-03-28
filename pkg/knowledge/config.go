@@ -9,15 +9,57 @@ import (
 
 // Config holds all configuration for the knowledge indexing pipeline.
 type Config struct {
-	BaseDir          string  // Root directory for knowledge base storage
-	Model            string  // LLM model for summarization
-	APIKey           string  // OpenAI API key
-	TargetTokens     int     // Max tokens for master context (~80K)
-	CompressionRatio float64 // Target compression per level (0.10 = 10%)
-	Concurrency      int     // Worker pool size for L1 summarization
-	AgentFileLimit   int     // Max files per agent assignment
-	AgentTokenBudget int     // Target raw token budget per L1 agent
+	BaseDir          string   // Root directory for knowledge base storage
+	Model            string   // Default LLM model (fallback when specific models are empty)
+	IndexModel       string   // LLM model for indexing (L1 summarization, compression, master context)
+	QueryModel       string   // LLM model for query drill-down decisions (can be cheap)
+	ReasoningModel   string   // LLM model for final answer reasoning (should be strong)
+	APIKey           string   // OpenAI API key
+	TargetTokens     int      // Max tokens for master context (~80K)
+	CompressionRatio float64  // Target compression per level (0.10 = 10%)
+	Concurrency      int      // Worker pool size for L1 summarization
+	AgentFileLimit   int      // Max files per agent assignment
+	AgentTokenBudget int      // Target raw token budget per L1 agent
+	ScanMode         ScanMode // "smart" (default) skips deps/generated; "deep" indexes everything
 }
+
+// GetIndexModel returns the model to use for indexing. Falls back to Model.
+func (c Config) GetIndexModel() string {
+	if c.IndexModel != "" {
+		return c.IndexModel
+	}
+	return c.Model
+}
+
+// GetQueryModel returns the model for query drill-down. Falls back to Model.
+func (c Config) GetQueryModel() string {
+	if c.QueryModel != "" {
+		return c.QueryModel
+	}
+	return c.Model
+}
+
+// GetReasoningModel returns the strong model for final answer. Falls back to Model.
+func (c Config) GetReasoningModel() string {
+	if c.ReasoningModel != "" {
+		return c.ReasoningModel
+	}
+	return c.Model
+}
+
+// ScanMode controls how aggressively the scanner filters out non-user code.
+type ScanMode string
+
+const (
+	// ScanModeSmart skips dependency directories, auto-generated files, lock
+	// files, and vendor packages. Only manually written code is indexed.
+	ScanModeSmart ScanMode = "smart"
+
+	// ScanModeDeep indexes every text file including packages, generated code,
+	// and vendored dependencies. Useful for auditing or when you need full
+	// coverage of all code running in production.
+	ScanModeDeep ScanMode = "deep"
+)
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
@@ -29,6 +71,7 @@ func DefaultConfig() Config {
 		Concurrency:      5,
 		AgentFileLimit:   5,
 		AgentTokenBudget: 50000,
+		ScanMode:         ScanModeSmart,
 	}
 }
 
@@ -41,6 +84,15 @@ func ConfigFromEnv() Config {
 	}
 	if v := os.Getenv("KNOWLEDGE_MODEL"); v != "" {
 		cfg.Model = v
+	}
+	if v := os.Getenv("KNOWLEDGE_INDEX_MODEL"); v != "" {
+		cfg.IndexModel = v
+	}
+	if v := os.Getenv("KNOWLEDGE_QUERY_MODEL"); v != "" {
+		cfg.QueryModel = v
+	}
+	if v := os.Getenv("KNOWLEDGE_REASONING_MODEL"); v != "" {
+		cfg.ReasoningModel = v
 	}
 	if v := os.Getenv("OPENAI_API_KEY"); v != "" {
 		cfg.APIKey = v
@@ -58,6 +110,12 @@ func ConfigFromEnv() Config {
 	if v := os.Getenv("KNOWLEDGE_CONCURRENCY"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.Concurrency = n
+		}
+	}
+	if v := os.Getenv("KNOWLEDGE_SCAN_MODE"); v != "" {
+		switch ScanMode(v) {
+		case ScanModeSmart, ScanModeDeep:
+			cfg.ScanMode = ScanMode(v)
 		}
 	}
 

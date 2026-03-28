@@ -7,9 +7,11 @@ import { Input } from '../../ui/input';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Badge } from '../../ui/badge';
 import { CEOMessageRenderer } from './CEOMessageRenderer';
-import { X, Send, Users, TrendingUp, MessageSquare, Clock, Paperclip, Wrench, CheckCircle2, HardDrive, MoreVertical } from 'lucide-react';
+import { X, Send, Users, TrendingUp, MessageSquare, Clock, Paperclip, Wrench, CheckCircle2, HardDrive, MoreVertical, Loader2, Database, AlertCircle, RefreshCw, FolderOpen, Copy, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { AgentDetails } from './AgentDetails';
+import { useAppStore } from '../../../store/useAppStore';
+import { reindexRepo } from '../../../api/client';
 
 /**
  * Props for configuring the ChatPanel messaging sliding window.
@@ -41,7 +43,29 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>(thread.messages);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [copiedPath, setCopiedPath] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeProject = useAppStore((s) => s.projects.find((p) => p.active));
+  const setProjectIndexingStatus = useAppStore((s) => s.setProjectIndexingStatus);
+  const indexingStatus = activeProject?.indexingStatus;
+
+  const handleReindex = async () => {
+    if (!activeProject?.projectPath) return;
+    const baseDir = activeProject.projectPath + '/.aimos-knowledge';
+    // Reset status to show progress in UI
+    setProjectIndexingStatus(activeProject.id, {
+      stage: 'checking',
+      current: 0,
+      total: 0,
+      done: false,
+      baseDir,
+    });
+    try {
+      await reindexRepo(activeProject.projectPath, { baseDir });
+    } catch (e) {
+      console.error('Reindex failed:', e);
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -195,6 +219,87 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
             </div>
           </div>
         </div>
+
+        {/* Indexing Status */}
+        {(() => {
+          const idx = indexingStatus;
+          if (!idx) return null;
+          const isRunning = !idx.done && !idx.error;
+          const pct = idx.total > 0 ? Math.round((idx.current / idx.total) * 100) : 0;
+          const displayPath = idx.baseDir || activeProject?.projectPath;
+          return (
+            <div className="px-4 py-3 border-b border-border">
+              <div className="bg-muted/60 rounded-lg p-2.5 border border-border flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5">
+                  {isRunning ? (
+                    <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin shrink-0" />
+                  ) : idx.error ? (
+                    <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  )}
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Indexing</span>
+                  {isRunning && (
+                    <span className="text-[10px] font-bold text-foreground ml-auto">{pct}%</span>
+                  )}
+                  {idx.done && !idx.error && (
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <span className="text-[10px] font-bold text-emerald-500">Done</span>
+                      {activeProject?.projectPath && (
+                        <button
+                          onClick={handleReindex}
+                          className="p-0.5 rounded hover:bg-muted transition-colors"
+                          title="Re-index changed files"
+                        >
+                          <RefreshCw className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {idx.error && (
+                    <span className="text-[10px] font-bold text-red-400 ml-auto">Error</span>
+                  )}
+                </div>
+                {displayPath && (
+                  <div className="flex items-start gap-1">
+                    <FolderOpen className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
+                    <span className="text-[9px] text-muted-foreground break-all leading-tight flex-1">
+                      {displayPath}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(displayPath);
+                        setCopiedPath(true);
+                        setTimeout(() => setCopiedPath(false), 1500);
+                      }}
+                      className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
+                      title="Copy path"
+                    >
+                      {copiedPath
+                        ? <CheckCheck className="w-3 h-3 text-emerald-500" />
+                        : <Copy className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                      }
+                    </button>
+                  </div>
+                )}
+                {isRunning && (
+                  <div className="w-full bg-background rounded-full h-1.5">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 to-cyan-400 h-1.5 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+                {isRunning && idx.stage && (
+                  <span className="text-[9px] text-muted-foreground truncate">{idx.stage}</span>
+                )}
+                {idx.error && (
+                  <span className="text-[9px] text-red-400 truncate">{idx.error}</span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Active Agents Roster (Scrollable) */}
         <div className="p-4 flex-1 flex flex-col min-h-0">

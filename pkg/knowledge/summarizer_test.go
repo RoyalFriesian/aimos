@@ -65,19 +65,23 @@ func TestSummarizeAgent_LLMError(t *testing.T) {
 	dir := t.TempDir()
 	createTestFile(t, dir, "main.go", "package main\n")
 
-	client := &errorClient{err: fmt.Errorf("rate limited")}
+	client := &errorClient{err: fmt.Errorf("some internal error")}
 
 	assignment := AgentAssignment{
 		Index:     0,
 		FilePaths: []string{"main.go"},
 	}
 
-	_, err := SummarizeAgent(context.Background(), client, "test-model", dir, assignment, 0.10)
-	if err == nil {
-		t.Fatal("expected error from LLM")
+	// Graceful degradation: should succeed with a placeholder summary, not return error
+	result, err := SummarizeAgent(context.Background(), client, "test-model", dir, assignment, 0.10)
+	if err != nil {
+		t.Fatalf("expected graceful degradation, got error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "rate limited") {
-		t.Errorf("expected 'rate limited' in error, got: %v", err)
+	if !strings.Contains(result.Summary, "Summary unavailable") {
+		t.Errorf("expected placeholder summary, got %q", result.Summary)
+	}
+	if !strings.Contains(result.Summary, "some internal error") {
+		t.Errorf("expected error message in placeholder, got %q", result.Summary)
 	}
 }
 
@@ -125,8 +129,15 @@ func TestSummarizeAllAgents_CancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // immediately cancel
 
-	_, err := SummarizeAllAgents(ctx, client, "test-model", dir, assignments, cfg, nil)
-	if err == nil {
-		t.Fatal("expected error from cancelled context")
+	// No longer returns error — gracefully degrades with placeholder summaries
+	results, err := SummarizeAllAgents(ctx, client, "test-model", dir, assignments, cfg, nil)
+	if err != nil {
+		t.Fatalf("expected graceful degradation, got error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !strings.Contains(results[0].Summary, "Summary unavailable") {
+		t.Errorf("expected placeholder summary for cancelled context, got %q", results[0].Summary)
 	}
 }

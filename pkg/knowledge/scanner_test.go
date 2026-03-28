@@ -17,7 +17,7 @@ func TestScanRepo(t *testing.T) {
 	createTestFile(t, dir, "node_modules/pkg/index.js", "module.exports = {}\n")
 	createTestFile(t, dir, "image.png", "\x89PNG\r\n\x1a\n")
 
-	result, err := ScanRepo(dir)
+	result, err := ScanRepo(dir, ScanModeSmart)
 	if err != nil {
 		t.Fatalf("ScanRepo error: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestScanRepoGitignore(t *testing.T) {
 	createTestFile(t, dir, "build/output.js", "compiled\n")
 	createTestFile(t, dir, "src/app.go", "package src\n")
 
-	result, err := ScanRepo(dir)
+	result, err := ScanRepo(dir, ScanModeSmart)
 	if err != nil {
 		t.Fatalf("ScanRepo error: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestScanRepoGitignore(t *testing.T) {
 
 func TestScanRepoEmpty(t *testing.T) {
 	dir := t.TempDir()
-	result, err := ScanRepo(dir)
+	result, err := ScanRepo(dir, ScanModeSmart)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestScanRepoEmpty(t *testing.T) {
 func TestScanRepoNotDir(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "file.txt")
 	os.WriteFile(f, []byte("hi"), 0o644)
-	_, err := ScanRepo(f)
+	_, err := ScanRepo(f, ScanModeSmart)
 	if err == nil {
 		t.Error("expected error for non-directory")
 	}

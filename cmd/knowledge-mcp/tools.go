@@ -12,8 +12,9 @@ import (
 // --- index_repo ---
 
 type IndexRepoInput struct {
-	Path  string `json:"path" jsonschema:"description=Absolute or relative path to the repository to index"`
-	Force bool   `json:"force,omitempty" jsonschema:"description=Force full re-index even if already indexed"`
+	Path  string `json:"path" jsonschema:"Absolute or relative path to the repository to index"`
+	Force bool   `json:"force,omitempty" jsonschema:"Force full re-index even if already indexed"`
+	Deep  bool   `json:"deep,omitempty" jsonschema:"Deep index mode: include all files including dependencies, generated code, and vendored packages. Default (false) indexes only manually written source code."`
 }
 
 type IndexRepoOutput struct {
@@ -27,8 +28,8 @@ type IndexRepoOutput struct {
 // --- query_repo ---
 
 type QueryRepoInput struct {
-	Path     string `json:"path" jsonschema:"description=Path to the repository to query (must be already indexed)"`
-	Question string `json:"question" jsonschema:"description=Natural language question about the codebase"`
+	Path     string `json:"path" jsonschema:"Path to the repository to query (must be already indexed)"`
+	Question string `json:"question" jsonschema:"Natural language question about the codebase"`
 }
 
 type QueryRepoOutput struct {
@@ -57,7 +58,7 @@ type RepoInfo struct {
 // --- reindex_repo ---
 
 type ReindexRepoInput struct {
-	Path string `json:"path" jsonschema:"description=Path to the repository to re-index incrementally"`
+	Path string `json:"path" jsonschema:"Path to the repository to re-index incrementally"`
 }
 
 type ReindexRepoOutput struct {
@@ -114,9 +115,15 @@ func indexRepoHandler(cfg knowledge.Config, llm knowledge.CompletionClient) mcp.
 			return nil, IndexRepoOutput{}, fmt.Errorf("path is required")
 		}
 
+		// Apply deep mode if requested
+		indexCfg := cfg
+		if input.Deep {
+			indexCfg.ScanMode = knowledge.ScanModeDeep
+		}
+
 		// Check if already indexed and not forcing
 		if !input.Force {
-			if m, found, _ := knowledge.FindRepoByPath(cfg, input.Path); found && m.Repo.Status == "ready" {
+			if m, found, _ := knowledge.FindRepoByPath(indexCfg, input.Path); found && m.Repo.Status == "ready" {
 				out := IndexRepoOutput{
 					RepoID:    m.Repo.ID,
 					Status:    "already_indexed",
@@ -139,7 +146,7 @@ func indexRepoHandler(cfg knowledge.Config, llm knowledge.CompletionClient) mcp.
 			stages = append(stages, msg)
 		}
 
-		manifest, err := knowledge.IndexRepo(ctx, llm, input.Path, cfg, progress)
+		manifest, err := knowledge.IndexRepo(ctx, llm, input.Path, indexCfg, progress)
 		if err != nil {
 			return nil, IndexRepoOutput{}, fmt.Errorf("indexing failed: %w", err)
 		}
@@ -180,7 +187,7 @@ func queryRepoHandler(cfg knowledge.Config, llm knowledge.CompletionClient) mcp.
 			return nil, QueryRepoOutput{}, fmt.Errorf("repository index status is '%s', not ready", manifest.Repo.Status)
 		}
 
-		resolverFn := knowledge.ResolveQuery(ctx, llm, cfg.Model, cfg, manifest)
+		resolverFn := knowledge.ResolveQuery(ctx, llm, cfg, manifest)
 		result, err := resolverFn(ctx, input.Question)
 		if err != nil {
 			return nil, QueryRepoOutput{}, fmt.Errorf("query failed: %w", err)

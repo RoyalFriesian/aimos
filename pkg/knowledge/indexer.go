@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -14,14 +15,14 @@ func IndexRepo(ctx context.Context, client CompletionClient, repoPath string, cf
 		return nil, fmt.Errorf("resolve path: %w", err)
 	}
 
-	repo := NewRepo(absPath, cfg.Model)
+	repo := NewRepo(absPath, cfg.GetIndexModel())
 	manifest := Manifest{Repo: repo}
 
 	// Phase 1: Scan
 	if progress != nil {
 		progress("scanning", 0, 0)
 	}
-	scanResult, err := ScanRepo(absPath)
+	scanResult, err := ScanRepo(absPath, cfg.ScanMode)
 	if err != nil {
 		return nil, fmt.Errorf("scan: %w", err)
 	}
@@ -53,7 +54,7 @@ func IndexRepo(ctx context.Context, client CompletionClient, repoPath string, cf
 	}
 
 	// Phase 3: L1 Summarization
-	l1Summaries, err := SummarizeAllAgents(ctx, client, cfg.Model, absPath, assignments, cfg, progress)
+	l1Summaries, err := SummarizeAllAgents(ctx, client, cfg.GetIndexModel(), absPath, assignments, cfg, progress)
 	if err != nil {
 		repo.Status = "failed"
 		manifest.Repo = repo
@@ -85,7 +86,8 @@ func IndexRepo(ctx context.Context, client CompletionClient, repoPath string, cf
 	// Phase 4: Recursive compression
 	currentSummaries := l1Summaries
 	currentLevel := 1
-	const maxLevels = 10 // safety bound
+	const maxLevels = 10    // safety bound
+	var cmap CompressionMap // accumulated across compression iterations
 
 	for currentLevel < maxLevels {
 		totalTokens := 0
@@ -98,19 +100,20 @@ func IndexRepo(ctx context.Context, client CompletionClient, repoPath string, cf
 			if progress != nil {
 				progress("master-context", 0, 0)
 			}
-			compressed, _, err := CompressLevel(ctx, client, cfg.Model, currentSummaries, currentLevel, cfg)
+			compressed, _, err := CompressLevel(ctx, client, cfg.GetIndexModel(), currentSummaries, currentLevel, cfg)
 			if err != nil {
 				return nil, fmt.Errorf("master context: %w", err)
 			}
 			currentLevel++
 			masterContent := compressed[0].Summary
 
+			cmap.Levels = append(cmap.Levels, buildLevelIndex(currentLevel, compressed))
+
 			if err := WriteMasterContext(cfg, repo.ID, currentLevel, masterContent); err != nil {
 				return nil, fmt.Errorf("write master context: %w", err)
 			}
 
-			// Write compression map (empty for now, can be enhanced later)
-			if err := WriteCompressionMap(cfg, repo.ID, currentLevel, CompressionMap{}); err != nil {
+			if err := WriteCompressionMap(cfg, repo.ID, currentLevel, cmap); err != nil {
 				return nil, fmt.Errorf("write compression map: %w", err)
 			}
 
@@ -128,7 +131,7 @@ func IndexRepo(ctx context.Context, client CompletionClient, repoPath string, cf
 			progress(fmt.Sprintf("compressing-l%d", currentLevel+1), 0, len(currentSummaries))
 		}
 
-		compressed, isMaster, err := CompressLevel(ctx, client, cfg.Model, currentSummaries, currentLevel, cfg)
+		compressed, isMaster, err := CompressLevel(ctx, client, cfg.GetIndexModel(), currentSummaries, currentLevel, cfg)
 		if err != nil {
 			return nil, fmt.Errorf("compress level %d: %w", currentLevel+1, err)
 		}
@@ -137,10 +140,13 @@ func IndexRepo(ctx context.Context, client CompletionClient, repoPath string, cf
 
 		if isMaster {
 			masterContent := compressed[0].Summary
+
+			cmap.Levels = append(cmap.Levels, buildLevelIndex(currentLevel, compressed))
+
 			if err := WriteMasterContext(cfg, repo.ID, currentLevel, masterContent); err != nil {
 				return nil, fmt.Errorf("write master context: %w", err)
 			}
-			if err := WriteCompressionMap(cfg, repo.ID, currentLevel, CompressionMap{}); err != nil {
+			if err := WriteCompressionMap(cfg, repo.ID, currentLevel, cmap); err != nil {
 				return nil, fmt.Errorf("write compression map: %w", err)
 			}
 
@@ -153,6 +159,9 @@ func IndexRepo(ctx context.Context, client CompletionClient, repoPath string, cf
 			})
 			break
 		}
+
+		// Record compression routing for this level
+		cmap.Levels = append(cmap.Levels, buildLevelIndex(currentLevel, compressed))
 
 		// Set repo ID on compressed summaries
 		for i := range compressed {
@@ -223,7 +232,7 @@ func ReindexRepo(ctx context.Context, client CompletionClient, repoPath string, 
 	}
 
 	// Scan current state
-	scanResult, err := ScanRepo(absPath)
+	scanResult, err := ScanRepo(absPath, cfg.ScanMode)
 	if err != nil {
 		return nil, 0, fmt.Errorf("scan: %w", err)
 	}
@@ -279,4 +288,15 @@ func ReindexRepo(ctx context.Context, client CompletionClient, repoPath string, 
 		return nil, 0, err
 	}
 	return m, changedFiles, nil
+}
+
+// buildLevelIndex creates a LevelIndex from compressed summaries, mapping each
+// parent agent index to the child agent indices it was built from (GroupIDs).
+func buildLevelIndex(level int, summaries []AgentSummary) LevelIndex {
+	entries := make(map[string][]int, len(summaries))
+	for _, s := range summaries {
+		key := strconv.Itoa(s.Index)
+		entries[key] = s.GroupIDs
+	}
+	return LevelIndex{Level: level, Entries: entries}
 }

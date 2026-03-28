@@ -112,13 +112,14 @@ func logValidationError(message string, err error, attrs ...any) error {
 }
 
 type Request struct {
-	Prompt    string          `json:"prompt"`
-	Model     string          `json:"model,omitempty"`
-	MissionID string          `json:"missionId,omitempty"`
-	Action    *ActionRequest  `json:"action,omitempty"`
-	Context   json.RawMessage `json:"context,omitempty"`
-	ThreadID  string          `json:"threadId,omitempty"`
-	TraceID   string          `json:"traceId,omitempty"`
+	Prompt           string          `json:"prompt"`
+	Model            string          `json:"model,omitempty"`
+	MissionID        string          `json:"missionId,omitempty"`
+	Action           *ActionRequest  `json:"action,omitempty"`
+	Context          json.RawMessage `json:"context,omitempty"`
+	ThreadID         string          `json:"threadId,omitempty"`
+	TraceID          string          `json:"traceId,omitempty"`
+	KnowledgeSummary string          `json:"-"` // Server-injected codebase context; never from client JSON
 }
 
 type ActionType string
@@ -130,6 +131,7 @@ const (
 	ActionCompleteTodo  ActionType = "complete_todo"
 	ActionScheduleTimer ActionType = "schedule_timer"
 	ActionCancelTimer   ActionType = "cancel_timer"
+	ActionReindex       ActionType = "reindex"
 )
 
 type ActionRequest struct {

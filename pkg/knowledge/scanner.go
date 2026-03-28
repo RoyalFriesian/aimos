@@ -13,6 +13,7 @@ import (
 // Scanner walks a repository directory and produces a TreeNode hierarchy.
 type Scanner struct {
 	ignoreRules []ignoreRule
+	mode        ScanMode
 }
 
 type ignoreRule struct {
@@ -22,13 +23,179 @@ type ignoreRule struct {
 	anchored bool // pattern contains '/' (anchored to gitignore location)
 }
 
-// defaultIgnorePatterns are always skipped regardless of .gitignore.
-var defaultIgnorePatterns = []string{
-	".git",
-	"node_modules",
-	"__pycache__",
-	".DS_Store",
-	"vendor",
+// -----------------------------------------------------------------------
+// Default‐ignore directories: always skipped in both smart and deep modes
+// because they never contain useful source code (VCS internals, OS junk).
+// -----------------------------------------------------------------------
+var alwaysIgnoreDirs = map[string]bool{
+	".git":      true,
+	".DS_Store": true,
+	".hg":       true,
+	".svn":      true,
+}
+
+// -----------------------------------------------------------------------
+// Smart-mode directory ignore list.
+// These are dependency / cache / build-output directories that package
+// managers and build tools create automatically.
+// -----------------------------------------------------------------------
+var smartIgnoreDirs = map[string]bool{
+	// JS/Node
+	"node_modules":     true,
+	"bower_components": true,
+	".yarn":            true,
+	".pnp":             true,
+
+	// Python
+	"__pycache__":   true,
+	".venv":         true,
+	"venv":          true,
+	"env":           true,
+	".tox":          true,
+	".mypy_cache":   true,
+	".pytest_cache": true,
+	".ruff_cache":   true,
+	"site-packages": true,
+	".eggs":         true,
+	"dist-info":     true,
+
+	// Go
+	"vendor": true,
+
+	// Rust
+	"target": true,
+
+	// Java / Kotlin / Gradle / Maven
+	".gradle": true,
+	".mvn":    true,
+
+	// Ruby
+	".bundle": true,
+
+	// .NET
+	"obj": true,
+
+	// Dart / Flutter
+	".dart_tool": true,
+	".pub-cache": true,
+
+	// Build outputs
+	"dist":    true,
+	"build":   true,
+	"out":     true,
+	".next":   true,
+	".nuxt":   true,
+	".output": true,
+	"_build":  true,
+
+	// IDE / editor
+	".idea":   true,
+	".vscode": true,
+	".vs":     true,
+
+	// Infra / CI caches
+	".terraform":    true,
+	".cache":        true,
+	".parcel-cache": true,
+	"coverage":      true,
+	"htmlcov":       true,
+}
+
+// -----------------------------------------------------------------------
+// Known path segments that indicate third-party / vendored code even when
+// they sit inside otherwise-allowed directory trees.  Matched against each
+// segment of the relative path.
+// -----------------------------------------------------------------------
+var smartIgnorePathSegments = map[string]bool{
+	"site-packages":  true,
+	"dist-info":      true,
+	"egg-info":       true,
+	"__pypackages__": true,
+}
+
+// -----------------------------------------------------------------------
+// Lock files and machine-generated metadata that never contain user logic.
+// -----------------------------------------------------------------------
+var lockAndMetaFiles = map[string]bool{
+	"package-lock.json":   true,
+	"yarn.lock":           true,
+	"pnpm-lock.yaml":      true,
+	"Cargo.lock":          true,
+	"poetry.lock":         true,
+	"Gemfile.lock":        true,
+	"go.sum":              true,
+	"Pipfile.lock":        true,
+	"composer.lock":       true,
+	"pubspec.lock":        true,
+	"flake.lock":          true,
+	"pnpm-workspace.yaml": true,
+	"RECORD":              true,
+	"METADATA":            true,
+	"WHEEL":               true,
+	"top_level.txt":       true,
+	"INSTALLER":           true,
+	"entry_points.txt":    true,
+	"direct_url.json":     true,
+}
+
+// -----------------------------------------------------------------------
+// File suffixes that indicate auto-generated or non-human-written code.
+// -----------------------------------------------------------------------
+var generatedSuffixes = []string{
+	".pb.go",        // protobuf-go
+	".pb.gw.go",     // grpc-gateway
+	"_generated.go", // k8s, code-gen
+	".gen.go",
+	"_gen.go",
+	"_string.go", // stringer
+	".generated.ts",
+	".generated.js",
+	".d.ts", // TypeScript declarations
+	".map",  // source maps
+	".min.js",
+	".min.css",
+	".chunk.js",
+	".chunk.css",
+	".bundle.js",
+	".bundle.css",
+}
+
+// -----------------------------------------------------------------------
+// Certificate, key, and data files that are never source code.
+// -----------------------------------------------------------------------
+var nonCodeExtensions = map[string]bool{
+	".pem":  true,
+	".crt":  true,
+	".key":  true,
+	".cer":  true,
+	".der":  true,
+	".p12":  true,
+	".pfx":  true,
+	".csv":  true,
+	".tsv":  true,
+	".log":  true,
+	".bak":  true,
+	".orig": true,
+	".swp":  true,
+	".swo":  true,
+	".tmp":  true,
+	".lock": true,
+}
+
+// -----------------------------------------------------------------------
+// First-line markers that indicate a file was auto-generated.
+// We read up to the first 5 lines looking for any of these (case-insensitive).
+// -----------------------------------------------------------------------
+var generatedMarkers = []string{
+	"do not edit",
+	"auto-generated",
+	"autogenerated",
+	"@generated",
+	"generated by",
+	"code generated",
+	"this file is generated",
+	"automatically generated",
+	"machine generated",
 }
 
 // binaryExtensions are file extensions treated as binary and skipped.
@@ -110,13 +277,19 @@ var extensionToLanguage = map[string]string{
 
 // ScanResult holds the output of a repository scan.
 type ScanResult struct {
-	Tree       []TreeNode
-	FileCount  int
-	TotalBytes int64
+	Tree        []TreeNode
+	FileCount   int
+	TotalBytes  int64
+	SkippedDirs int // directories skipped by smart filtering
+	SkippedGen  int // files skipped as auto-generated
 }
 
 // ScanRepo walks the repository at rootPath and returns a flat list of file TreeNodes.
-func ScanRepo(rootPath string) (*ScanResult, error) {
+// It respects the given ScanMode: ScanModeSmart filters aggressively; ScanModeDeep keeps everything.
+func ScanRepo(rootPath string, mode ScanMode) (*ScanResult, error) {
+	if mode == "" {
+		mode = ScanModeSmart
+	}
 	absRoot, err := filepath.Abs(rootPath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve root: %w", err)
@@ -130,11 +303,12 @@ func ScanRepo(rootPath string) (*ScanResult, error) {
 		return nil, fmt.Errorf("%s is not a directory", absRoot)
 	}
 
-	s := &Scanner{}
+	s := &Scanner{mode: mode}
 	s.loadGitignore(absRoot)
 
 	var files []TreeNode
 	var totalBytes int64
+	var skippedDirs, skippedGen int
 
 	err = filepath.WalkDir(absRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -151,11 +325,26 @@ func ScanRepo(rootPath string) (*ScanResult, error) {
 
 		name := d.Name()
 
-		// Always skip default ignore dirs
+		// ---- Directory filtering ----
 		if d.IsDir() {
-			for _, p := range defaultIgnorePatterns {
-				if name == p {
+			// Always skip VCS internals and OS junk
+			if alwaysIgnoreDirs[name] {
+				skippedDirs++
+				return filepath.SkipDir
+			}
+
+			// Smart mode: skip dependency, cache, build, IDE dirs
+			if mode == ScanModeSmart {
+				if smartIgnoreDirs[name] {
+					skippedDirs++
 					return filepath.SkipDir
+				}
+				// Check path segments for deep vendor paths
+				for _, seg := range strings.Split(rel, string(filepath.Separator)) {
+					if smartIgnorePathSegments[seg] {
+						skippedDirs++
+						return filepath.SkipDir
+					}
 				}
 			}
 		}
@@ -163,6 +352,7 @@ func ScanRepo(rootPath string) (*ScanResult, error) {
 		// Check gitignore rules
 		if s.isIgnored(rel, d.IsDir()) {
 			if d.IsDir() {
+				skippedDirs++
 				return filepath.SkipDir
 			}
 			return nil
@@ -172,15 +362,34 @@ func ScanRepo(rootPath string) (*ScanResult, error) {
 			return nil // don't add dirs to the flat list
 		}
 
-		// Skip binary files
+		// ---- File filtering ----
+
+		// Skip binary files by extension (always, in both modes)
 		ext := strings.ToLower(filepath.Ext(name))
 		if binaryExtensions[ext] {
 			return nil
 		}
 
-		// Check for compound extensions like .min.js
-		if strings.HasSuffix(strings.ToLower(name), ".min.js") || strings.HasSuffix(strings.ToLower(name), ".min.css") {
-			return nil
+		// Smart mode file filtering
+		if mode == ScanModeSmart {
+			// Lock / metadata files
+			if lockAndMetaFiles[name] {
+				return nil
+			}
+
+			// Non-code extensions (.pem, .crt, .log, .bak, etc.)
+			if nonCodeExtensions[ext] {
+				return nil
+			}
+
+			// Generated file suffixes (.pb.go, .min.js, .d.ts, .map, etc.)
+			lowerName := strings.ToLower(name)
+			for _, suffix := range generatedSuffixes {
+				if strings.HasSuffix(lowerName, suffix) {
+					skippedGen++
+					return nil
+				}
+			}
 		}
 
 		// Skip very large files (>1MB)
@@ -194,6 +403,12 @@ func ScanRepo(rootPath string) (*ScanResult, error) {
 
 		// Quick binary check: read first 512 bytes looking for null bytes
 		if isBinaryFile(path) {
+			return nil
+		}
+
+		// Smart mode: check first few lines for "auto-generated" markers
+		if mode == ScanModeSmart && hasGeneratedMarker(path) {
+			skippedGen++
 			return nil
 		}
 
@@ -218,10 +433,33 @@ func ScanRepo(rootPath string) (*ScanResult, error) {
 	}
 
 	return &ScanResult{
-		Tree:       files,
-		FileCount:  len(files),
-		TotalBytes: totalBytes,
+		Tree:        files,
+		FileCount:   len(files),
+		TotalBytes:  totalBytes,
+		SkippedDirs: skippedDirs,
+		SkippedGen:  skippedGen,
 	}, nil
+}
+
+// hasGeneratedMarker reads the first few lines of a file and returns true
+// if any of them contain a well-known auto-generation marker.
+func hasGeneratedMarker(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for i := 0; i < 5 && scanner.Scan(); i++ {
+		lower := strings.ToLower(scanner.Text())
+		for _, marker := range generatedMarkers {
+			if strings.Contains(lower, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *Scanner) loadGitignore(rootPath string) {

@@ -53,6 +53,20 @@ export interface ThreadStats {
 }
 
 /**
+ * Indexing status for a project's codebase knowledge.
+ */
+export type IndexingStage = 'not_started' | 'starting' | 'scanning' | 'distributing' | 'summarizing' | 'compressing' | 'ready' | 'failed';
+
+export interface IndexingStatus {
+  stage: IndexingStage;
+  current: number;
+  total: number;
+  done: boolean;
+  error?: string;
+  baseDir?: string;
+}
+
+/**
  * Represents a high-level project (also maps to top-level Missions in the backend).
  */
 export interface Project {
@@ -64,6 +78,10 @@ export interface Project {
   active: boolean;
   /** ID of the root thread associated with this project/mission */
   rootThreadId?: string;
+  /** Filesystem path of the project */
+  projectPath?: string;
+  /** Codebase indexing status */
+  indexingStatus?: IndexingStatus;
 }
 
 /**

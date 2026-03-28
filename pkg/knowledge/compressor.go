@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const compressSystemPrompt = `You are a knowledge compression agent. You receive multiple code summaries from different parts of a codebase and must compress them into a single cohesive summary.
+const compressSystemPrompt = `You are a knowledge compression agent. You receive multiple summaries from different parts of a repository and must compress them into a single cohesive summary.
 
 Your compressed output MUST:
 - Preserve all package/module names and their purposes
@@ -17,16 +17,27 @@ Your compressed output MUST:
 - Remove redundancy across summaries
 - Keep the most important technical details
 
+CRITICAL for data/log/event repositories:
+- Preserve ALL entity names, IDs, and identifiers with their action counts
+- Preserve timestamp ranges per file and globally
+- Preserve cross-file relationships and correlation hints
+- Preserve exact event counts — do NOT approximate
+- Preserve drill-down hints: which files to consult for specific questions
+- Preserve record formats and schemas
+- Create a CROSS-REFERENCE SECTION showing which files relate to which entities
+
 Rules:
 - Keep total output at most %d tokens (approximately %d%% of input)
 - Use clear section headings
-- Maintain a hierarchical structure: packages → types → functions
+- Maintain a hierarchical structure
 - Do NOT invent information — only compress what is provided
-- Highlight key interfaces and data contracts`
+- Highlight key interfaces, data contracts, and cross-file relationships`
 
-const masterContextSystemPrompt = `You are a master knowledge compiler. You receive compressed summaries of an entire codebase and must produce the definitive architectural overview.
+const masterContextSystemPrompt = `You are a master knowledge compiler. You receive compressed summaries of an entire repository and must produce the definitive overview.
 
-Your output MUST include:
+IMPORTANT: Detect whether this repository is primarily source code, data/logs, documentation, or a mix. Adapt your output accordingly.
+
+## For CODE repositories, include:
 1. **Repository Overview**: What this codebase does, its primary purpose, and target users
 2. **Architecture**: Major packages/modules, their responsibilities, and how they connect
 3. **Key Interfaces & Contracts**: The most important interfaces, data types, and API surfaces
@@ -36,12 +47,32 @@ Your output MUST include:
 7. **Dependencies**: External services, databases, APIs, third-party libraries of note
 8. **Package Directory**: Brief 1-line description of every package/module
 
+## For DATA / LOG repositories, include:
+1. **Repository Overview**: What data this repository contains, its purpose, and domain
+2. **Data Schema**: The format and structure of the data files (with examples)
+3. **Entity Directory**: Every entity (player, user, device, etc.) with:
+   - Which files contain data about that entity
+   - Total event/record count per entity
+   - Types of actions/events recorded
+4. **Rules & Specifications**: Complete summary of any rules, game mechanics, protocols, or specifications files
+5. **Cross-File Correlation Guide**: How to find relationships across files:
+   - What field to match on (e.g., timestamp, ID, sequence number)
+   - Which files need to be read together to answer cross-entity questions
+   - Known correlation patterns (e.g., "a bounce in one file corresponds to a catch 1 minute later in another file")
+6. **Time Range**: Global time span of the data, per-file if varying
+7. **Statistical Summary**: Global counts of each event type across all files
+8. **Drill-Down Guide**: A lookup table: "To answer questions about X, consult files Y and Z, search for keyword W"
+
+## For MIXED repositories, include both sections as relevant.
+
 Rules:
 - Keep total output under %d tokens
-- This will be used as context for answering questions about the codebase
-- Optimize for an AI agent that needs to understand the codebase to answer developer questions
+- This will be used as context for answering questions about the repository
+- Optimize for an AI agent that needs to answer precise questions with file and line references
 - Structure with markdown headings for easy navigation
-- Be precise about types, function signatures, and package paths`
+- Be precise about counts, timestamps, file paths, and entity names
+- NEVER approximate counts — preserve exact numbers from the summaries
+- Include a Drill-Down Guide section that maps question types to specific files`
 
 // CompressLevel takes agent summaries from level K and produces compressed summaries for level K+1.
 // If the total tokens of input summaries fit within targetTokens, it produces the master context instead.

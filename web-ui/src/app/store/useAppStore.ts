@@ -1,20 +1,21 @@
 import { create } from 'zustand';
-import { Project, Thread } from '../types';
+import { Project, Thread, IndexingStatus } from '../types';
 
 interface AppState {
-  activeView: 'mindmap' | 'onboarding';
+  activeView: 'mindmap' | 'onboarding' | 'knowledge';
   isSidebarCollapsed: boolean;
   projects: Project[];
   workspaceThreads: Thread[] | null;
   isLoadingProject: boolean;
 
   // Actions
-  setActiveView: (view: 'mindmap' | 'onboarding') => void;
+  setActiveView: (view: 'mindmap' | 'onboarding' | 'knowledge') => void;
   setIsSidebarCollapsed: (collapsed: boolean) => void;
   setProjects: (projects: Project[]) => void;
   updateProject: (project: Project) => void;
   setWorkspaceThreads: (threads: Thread[] | null) => void;
   setIsLoadingProject: (loading: boolean) => void;
+  setProjectIndexingStatus: (projectId: string, status: IndexingStatus | undefined) => void;
 }
 
 /**
@@ -35,4 +36,9 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   setWorkspaceThreads: (threads) => set({ workspaceThreads: threads }),
   setIsLoadingProject: (loading) => set({ isLoadingProject: loading }),
+  setProjectIndexingStatus: (projectId, status) => set((state) => ({
+    projects: state.projects.map((p) =>
+      p.id === projectId ? { ...p, indexingStatus: status } : p
+    )
+  })),
 }));

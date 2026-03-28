@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Folder, Plus, Bot, Settings, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Folder, Plus, Bot, Settings, Pencil, Database, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import {
@@ -28,6 +28,8 @@ interface SidebarProps {
   onUpdateProject?: (project: Project) => void;
   /** Function selector resolving to mapping a chosen project into the global view */
   onSelectProject?: (projectId: string) => void;
+  /** Handler to open the Knowledge Base view */
+  onOpenKnowledge?: () => void;
 }
 
 /**
@@ -43,7 +45,8 @@ export function Sidebar({
     { id: '3', name: 'Website Redesign', active: false },
   ],
   onUpdateProject,
-  onSelectProject
+  onSelectProject,
+  onOpenKnowledge
 }: SidebarProps) {
   const [projectToRename, setProjectToRename] = useState<Project | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
@@ -121,6 +124,22 @@ export function Sidebar({
                       {project.name}
                     </span>
                   )}
+                  {/* Indexing status indicator */}
+                  {project.indexingStatus && !project.indexingStatus.done && !project.indexingStatus.error && (
+                    <span title={`Indexing: ${project.indexingStatus.stage} (${project.indexingStatus.current}/${project.indexingStatus.total})`}>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
+                    </span>
+                  )}
+                  {project.indexingStatus?.done && !project.indexingStatus.error && (
+                    <span title="Codebase indexed">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                    </span>
+                  )}
+                  {project.indexingStatus?.error && (
+                    <span title={`Indexing error: ${project.indexingStatus.error}`}>
+                      <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    </span>
+                  )}
                 </div>
                 {!isCollapsed && (
                   <div
@@ -139,6 +158,13 @@ export function Sidebar({
       </div>
 
       <div className="p-4 border-t border-border space-y-2">
+        <button
+          onClick={onOpenKnowledge}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground ${isCollapsed ? 'justify-center' : ''}`}
+        >
+          <Database className="w-4 h-4" />
+          {!isCollapsed && <span>Knowledge</span>}
+        </button>
         <button className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground ${isCollapsed ? 'justify-center' : ''}`}>
           <Settings className="w-4 h-4" />
           {!isCollapsed && <span>Settings</span>}
