@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	aiclients "github.com/Sarnga/agent-platform/ai-clients"
 	"github.com/Sarnga/agent-platform/agents/ceo"
+	aiclients "github.com/Sarnga/agent-platform/ai-clients"
 	"github.com/Sarnga/agent-platform/pkg/agents"
 	"github.com/Sarnga/agent-platform/pkg/feedback"
 	"github.com/Sarnga/agent-platform/pkg/threads"

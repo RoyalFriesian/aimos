@@ -27,12 +27,12 @@ func NewBudgetConfig() *BudgetConfig {
 	return c
 }
 
-func (c *BudgetConfig) Enabled() bool      { return c.enabled.Load() }
-func (c *BudgetConfig) Threshold() int64    { return c.threshold.Load() }
-func (c *BudgetConfig) Target() int64       { return c.target.Load() }
-func (c *BudgetConfig) SetEnabled(v bool)   { c.enabled.Store(v) }
+func (c *BudgetConfig) Enabled() bool        { return c.enabled.Load() }
+func (c *BudgetConfig) Threshold() int64     { return c.threshold.Load() }
+func (c *BudgetConfig) Target() int64        { return c.target.Load() }
+func (c *BudgetConfig) SetEnabled(v bool)    { c.enabled.Store(v) }
 func (c *BudgetConfig) SetThreshold(v int64) { c.threshold.Store(v) }
-func (c *BudgetConfig) SetTarget(v int64)   { c.target.Store(v) }
+func (c *BudgetConfig) SetTarget(v int64)    { c.target.Store(v) }
 
 // Snapshot returns a plain struct copy for JSON serialization.
 func (c *BudgetConfig) Snapshot() BudgetSnapshot {

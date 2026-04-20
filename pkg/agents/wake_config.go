@@ -19,10 +19,10 @@ func NewWakeIntervalConfig() *WakeIntervalConfig {
 	return c
 }
 
-func (c *WakeIntervalConfig) CEOSeconds() int64     { return c.ceoSeconds.Load() }
-func (c *WakeIntervalConfig) ManagerSeconds() int64  { return c.managerSeconds.Load() }
-func (c *WakeIntervalConfig) WorkerSeconds() int64   { return c.workerSeconds.Load() }
-func (c *WakeIntervalConfig) SetCEOSeconds(v int64)  { c.ceoSeconds.Store(v) }
+func (c *WakeIntervalConfig) CEOSeconds() int64         { return c.ceoSeconds.Load() }
+func (c *WakeIntervalConfig) ManagerSeconds() int64     { return c.managerSeconds.Load() }
+func (c *WakeIntervalConfig) WorkerSeconds() int64      { return c.workerSeconds.Load() }
+func (c *WakeIntervalConfig) SetCEOSeconds(v int64)     { c.ceoSeconds.Store(v) }
 func (c *WakeIntervalConfig) SetManagerSeconds(v int64) { c.managerSeconds.Store(v) }
 func (c *WakeIntervalConfig) SetWorkerSeconds(v int64)  { c.workerSeconds.Store(v) }
 

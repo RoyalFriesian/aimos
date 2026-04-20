@@ -25,20 +25,20 @@ type FileLogger struct {
 
 // AICallRecord is a single JSONL line written by the file logger.
 type AICallRecord struct {
-	Timestamp   string         `json:"timestamp"`
-	Project     string         `json:"project,omitempty"`
-	MissionID   string         `json:"missionId,omitempty"`
-	ThreadID    string         `json:"threadId,omitempty"`
-	TraceID     string         `json:"traceId,omitempty"`
-	Direction   string         `json:"direction"` // "request" or "response"
-	Method      string         `json:"method"`
-	Model       string         `json:"model"`
-	TokensEst   int            `json:"tokensEst"`
-	DurationMs  int64          `json:"durationMs,omitempty"`
-	Error       string         `json:"error,omitempty"`
-	Input       any            `json:"input,omitempty"`
-	Output      string         `json:"output,omitempty"`
-	Details     map[string]any `json:"details,omitempty"`
+	Timestamp  string         `json:"timestamp"`
+	Project    string         `json:"project,omitempty"`
+	MissionID  string         `json:"missionId,omitempty"`
+	ThreadID   string         `json:"threadId,omitempty"`
+	TraceID    string         `json:"traceId,omitempty"`
+	Direction  string         `json:"direction"` // "request" or "response"
+	Method     string         `json:"method"`
+	Model      string         `json:"model"`
+	TokensEst  int            `json:"tokensEst"`
+	DurationMs int64          `json:"durationMs,omitempty"`
+	Error      string         `json:"error,omitempty"`
+	Input      any            `json:"input,omitempty"`
+	Output     string         `json:"output,omitempty"`
+	Details    map[string]any `json:"details,omitempty"`
 }
 
 // NewFileLogger creates a file logger that writes under baseDir.

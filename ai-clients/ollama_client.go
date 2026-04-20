@@ -56,6 +56,7 @@ type ollamaChatRequest struct {
 	Model    string              `json:"model"`
 	Messages []ollamaChatMessage `json:"messages"`
 	Stream   bool                `json:"stream"`
+	Format   string              `json:"format,omitempty"` // "json" to force JSON output
 }
 
 type ollamaChatMessage struct {
@@ -97,6 +98,7 @@ func (c *OllamaClient) GenerateFromMessages(ctx context.Context, model string, m
 		Model:    model,
 		Messages: chatMsgs,
 		Stream:   false,
+		Format:   "json",
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

@@ -5,10 +5,10 @@ import "context"
 type logContextKey struct{ name string }
 
 var (
-	projectKey  = logContextKey{"project"}
-	missionKey  = logContextKey{"mission"}
-	threadKey   = logContextKey{"thread"}
-	traceKey    = logContextKey{"trace"}
+	projectKey = logContextKey{"project"}
+	missionKey = logContextKey{"mission"}
+	threadKey  = logContextKey{"thread"}
+	traceKey   = logContextKey{"trace"}
 )
 
 // LogContext holds project-scoped metadata that the logging middleware
