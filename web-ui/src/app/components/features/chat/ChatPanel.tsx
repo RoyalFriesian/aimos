@@ -7,11 +7,13 @@ import { Input } from '../../ui/input';
 import { ScrollArea } from '../../ui/scroll-area';
 import { Badge } from '../../ui/badge';
 import { CEOMessageRenderer } from './CEOMessageRenderer';
-import { X, Send, Users, TrendingUp, MessageSquare, Clock, Paperclip, Wrench, CheckCircle2, HardDrive, MoreVertical, Loader2, Database, AlertCircle, RefreshCw, FolderOpen, Copy, CheckCheck } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { X, Send, Users, TrendingUp, MessageSquare, Clock, Paperclip, Wrench, CheckCircle2, HardDrive, MoreVertical, Loader2, Database, AlertCircle, RefreshCw, FolderOpen, Copy, CheckCheck, Brain, Cpu, Timer } from 'lucide-react';
 import { format } from 'date-fns';
 import { AgentDetails } from './AgentDetails';
 import { useAppStore } from '../../../store/useAppStore';
-import { reindexRepo } from '../../../api/client';
+import { reindexRepo, updateAgentModel } from '../../../api/client';
 
 /**
  * Props for configuring the ChatPanel messaging sliding window.
@@ -21,6 +23,18 @@ interface ChatPanelProps {
   thread: Thread;
   /** Function callback triggered to handle the manual closure of the ChatPanel view */
   onClose: () => void;
+}
+
+/** Tiny countdown component that re-renders every second. */
+function WakeCountdown({ target }: { target: string }) {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const update = () => setSecs(Math.max(0, Math.round((new Date(target).getTime() - Date.now()) / 1000)));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  return <span className="tabular-nums font-mono">{secs}s</span>;
 }
 
 interface UploadedAttachmentItem {
@@ -44,10 +58,39 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>(thread.messages);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [copiedPath, setCopiedPath] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeProject = useAppStore((s) => s.projects.find((p) => p.active));
   const setProjectIndexingStatus = useAppStore((s) => s.setProjectIndexingStatus);
+  const agentNodes = useAppStore((s) => s.agentNodes);
   const indexingStatus = activeProject?.indexingStatus;
+
+  // Find the agent node for this thread (if available)
+  const currentAgentNode = agentNodes?.find(a => a.threadId === thread.id) || null;
+  const [modelInput, setModelInput] = useState(currentAgentNode?.model || '');
+  const [isChangingModel, setIsChangingModel] = useState(false);
+
+  // Re-sync messages when the thread changes (e.g. clicking a different node).
+  useEffect(() => {
+    setMessages(thread.messages);
+  }, [thread.id]);
+
+  // Re-sync model input when agent node or thread changes.
+  useEffect(() => {
+    setModelInput(currentAgentNode?.model || '');
+  }, [currentAgentNode?.model, thread.id]);
+
+  const handleModelChange = async () => {
+    if (!currentAgentNode || !modelInput.trim() || modelInput === currentAgentNode.model) return;
+    setIsChangingModel(true);
+    try {
+      await updateAgentModel(currentAgentNode.id, modelInput.trim());
+    } catch (err) {
+      console.error('Failed to update model:', err);
+    } finally {
+      setIsChangingModel(false);
+    }
+  };
 
   const handleReindex = async () => {
     if (!activeProject?.projectPath) return;
@@ -71,40 +114,39 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isSending]);
 
-  const handleSendMessage = async () => {
-    if (!message.trim()) return;
+  const sendMessageToAPI = async (content: string) => {
+    if (!content.trim() || isSending) return;
 
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       agentId: 'user',
-      content: message,
+      content,
       timestamp: new Date(),
       type: 'user',
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setMessage('');
+    setIsSending(true);
 
     try {
       const { sendCEORequest } = await import('../../../api/client');
       const res = await sendCEORequest({
-        prompt: userMessage.content,
-        threadId: thread.id, 
-        // using thread.id assuming it links to the backend thread later
+        prompt: content,
+        threadId: thread.id,
       });
-      
+
       const botMessage: Message = {
         id: res.responseId,
         agentId: thread.assignedAgent || 'ceo-agent',
-        content: res.payload?.message || res.payload?.Message || JSON.stringify(res.payload, null, 2),
+        content: res.payload?.userMessage || res.payload?.message || res.payload?.Message || JSON.stringify(res.payload, null, 2),
         timestamp: new Date(res.createdAt),
         type: 'agent',
         messageType: res.mode,
         contentJson: res.payload,
       };
-      
+
       setMessages(prev => [...prev, botMessage]);
     } catch (err) {
       console.error("Failed sending message:", err);
@@ -116,7 +158,16 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
         type: 'agent',
       };
       setMessages(prev => [...prev, errMsg]);
+    } finally {
+      setIsSending(false);
     }
+  };
+
+  const handleSendMessage = async () => {
+    if (!message.trim()) return;
+    const content = message;
+    setMessage('');
+    await sendMessageToAPI(content);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -335,6 +386,53 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
             </div>
           </ScrollArea>
         </div>
+
+        {/* Agent Node Info: Model + Timer */}
+        {currentAgentNode && (
+          <div className="p-4 border-t border-border flex flex-col gap-3">
+            {/* Next Wake Timer */}
+            {currentAgentNode.nextWakeAt && !currentAgentNode.paused && (
+              <div className="flex items-center gap-2">
+                <Timer className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[10px] text-muted-foreground">
+                  Next wake: <WakeCountdown target={currentAgentNode.nextWakeAt} />
+                </span>
+              </div>
+            )}
+            {currentAgentNode.paused && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[9px] uppercase tracking-wider bg-amber-500/10 border-amber-500/30 text-amber-500">
+                  Paused
+                </Badge>
+              </div>
+            )}
+            {/* Model Selector */}
+            <div>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                <Cpu className="w-3 h-3" />
+                Model
+              </span>
+              <div className="flex gap-1.5">
+                <Input
+                  value={modelInput}
+                  onChange={(e) => setModelInput(e.target.value)}
+                  placeholder="e.g. gpt-5-mini"
+                  className="h-7 text-xs"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleModelChange(); }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[10px]"
+                  onClick={handleModelChange}
+                  disabled={isChangingModel || !modelInput.trim() || modelInput === currentAgentNode.model}
+                >
+                  {isChangingModel ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Set'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right Column (Chat View) */}
@@ -423,12 +521,107 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
                     <CEOMessageRenderer
                       payload={msg.contentJson}
                       mode={msg.messageType}
-                      onQuestionClick={(q) => setMessage(q)}
+                      onQuestionClick={(q) => sendMessageToAPI(q)}
+                      onSubmitAnswers={(formatted) => sendMessageToAPI(formatted)}
+                      onAction={async (action) => {
+                        setIsSending(true);
+                        try {
+                          const { sendCEORequest, loadProject } = await import('../../../api/client');
+                          const res = await sendCEORequest({
+                            prompt: '',
+                            threadId: thread.id,
+                            action,
+                          });
+                          const botMessage: Message = {
+                            id: res.responseId,
+                            agentId: thread.assignedAgent || 'ceo-agent',
+                            content: res.payload?.userMessage || res.payload?.message || JSON.stringify(res.payload, null, 2),
+                            timestamp: new Date(res.createdAt),
+                            type: 'agent',
+                            messageType: res.mode,
+                            contentJson: res.payload,
+                          };
+                          setMessages(prev => [...prev, botMessage]);
+
+                          // Refresh project threads so the mindmap picks up newly created nodes
+                          try {
+                            const projectData = await loadProject(thread.id);
+                            if (projectData?.threads) {
+                              const parsedThreads = projectData.threads.map((t: Record<string, unknown>) => ({
+                                id: t.ID,
+                                title: (t.Title as string) || 'Thread',
+                                agents: [{ id: 'ceo-agent', name: 'CEO Agent', role: 'CEO', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ceo', expertise: [] }],
+                                stats: {
+                                  totalMessages: ((projectData.messages && (projectData.messages as Record<string, unknown[]>)[t.ID as string]) || []).length,
+                                  activeAgents: 1,
+                                  progress: t.Status === 'completed' ? 100 : 50,
+                                  status: (t.Status as string) || 'active',
+                                },
+                                messages: ((projectData.messages && (projectData.messages as Record<string, Record<string, unknown>[]>)[t.ID as string]) || []).map((m) => ({
+                                  id: m.ID,
+                                  agentId: m.AuthorAgentID || 'system',
+                                  content: m.Content,
+                                  timestamp: new Date(m.CreatedAt as string),
+                                  type: (m.AuthorRole === 'user' || m.AuthorRole === 'client' || m.AuthorAgentID === 'user') ? 'user' : 'agent',
+                                  messageType: m.MessageType,
+                                  contentJson: typeof m.ContentJSON === 'string' ? (() => { try { return JSON.parse(m.ContentJSON as string); } catch { return undefined; } })() : m.ContentJSON,
+                                })),
+                                parentId: t.ParentThreadID || null,
+                                childIds: projectData.threads.filter((child: Record<string, unknown>) => child.ParentThreadID === t.ID).map((child: Record<string, unknown>) => child.ID),
+                              }));
+                              useAppStore.getState().setWorkspaceThreads(parsedThreads);
+
+                              // Refresh agent nodes so the mindmap picks up newly created agents
+                              if (projectData.agents && Array.isArray(projectData.agents) && projectData.agents.length > 0) {
+                                const parsedAgents = projectData.agents.map((a: Record<string, unknown>) => ({
+                                  id: a.id,
+                                  parentAgentId: a.parentAgentId || null,
+                                  rootAgentId: a.rootAgentId || null,
+                                  projectId: a.projectId,
+                                  threadId: a.threadId,
+                                  missionId: a.missionId,
+                                  name: a.name,
+                                  role: a.role,
+                                  problemStatement: a.problemStatement || '',
+                                  status: a.status || 'active',
+                                  createdAt: a.createdAt ? new Date(a.createdAt as string) : new Date(),
+                                  updatedAt: a.updatedAt ? new Date(a.updatedAt as string) : new Date(),
+                                  childIds: [] as string[],
+                                }));
+                                for (const agent of parsedAgents) {
+                                  agent.childIds = parsedAgents.filter((c: { parentAgentId: unknown }) => c.parentAgentId === agent.id).map((c: { id: string }) => c.id);
+                                }
+                                useAppStore.getState().setAgentNodes(parsedAgents);
+                              }
+                            }
+                          } catch (refreshErr) {
+                            console.warn('Failed to refresh project threads after action:', refreshErr);
+                          }
+                        } catch (err) {
+                          console.error('Action failed:', err);
+                          const errMsg: Message = {
+                            id: `msg-err-${Date.now()}`,
+                            agentId: 'system',
+                            content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+                            timestamp: new Date(),
+                            type: 'agent',
+                          };
+                          setMessages(prev => [...prev, errMsg]);
+                        } finally {
+                          setIsSending(false);
+                        }
+                      }}
                       responseId={msg.id}
                       threadId={thread.id}
                     />
                   ) : (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    isUser ? (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    ) : (
+                      <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      </div>
+                    )
                   )}
                   {hasAttachmentCard && (
                     <div className="mt-2.5 rounded-lg border border-border bg-muted/40 p-2.5">
@@ -466,6 +659,29 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
             </div>
           );
         })}
+
+        {/* CEO Thinking Indicator */}
+        {isSending && (
+          <div className="flex gap-3 flex-row">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center border border-violet-500/30 shadow-[0_0_12px_rgba(139,92,246,0.3)] animate-pulse">
+                <Brain className="w-4 h-4 text-white" />
+              </div>
+            </div>
+            <div className="flex flex-col max-w-[75%]">
+              <div className="px-3 py-2.5 rounded-xl rounded-tl-sm bg-card border border-violet-500/20">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span className="text-[12px] text-violet-500 font-medium">CEO is thinking…</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Input Area */}
@@ -500,19 +716,23 @@ export function ChatPanel({ thread, onClose }: ChatPanelProps) {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Message agents... (Use @ to specify an agent)"
-              className="flex-1 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground min-h-[36px] px-3 text-sm"
+              placeholder={isSending ? 'CEO is thinking…' : 'Message agents... (Use @ to specify an agent)'}
+              disabled={isSending}
+              className="flex-1 bg-transparent border-0 focus-visible:ring-0 text-foreground placeholder:text-muted-foreground min-h-[36px] px-3 text-sm disabled:opacity-50"
             />
             <Button 
               onClick={handleSendMessage} 
               size="icon"
+              disabled={isSending}
               className={`h-9 w-9 rounded-lg transition-all ${
-                message.trim() 
-                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]' 
-                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+                isSending
+                  ? 'bg-violet-600/50 text-white cursor-not-allowed'
+                  : message.trim() 
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]' 
+                    : 'bg-muted text-muted-foreground cursor-not-allowed'
               }`}
             >
-              <Send className="w-4 h-4" />
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>
         </div>

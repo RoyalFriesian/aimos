@@ -92,6 +92,7 @@ type Store interface {
 	CreateThread(thread Thread) error
 	GetThread(threadID string) (Thread, error)
 	ListByMission(missionID string) ([]Thread, error)
+	ListByRootMission(rootMissionID string) ([]Thread, error)
 	ListRootThreads() ([]Thread, error)
 	SearchReusableThreads(query string, limit int) ([]ReusableThreadMatch, error)
 	AppendMessage(message Message) error
@@ -99,4 +100,5 @@ type Store interface {
 	UpdateThreadMode(threadID string, mode string) error
 	UpdateThreadTitle(threadID string, title string) error
 	UpdateThreadOwner(threadID string, ownerAgentID string) error
+	UpdateThreadStatus(threadID string, status ThreadStatus) error
 }

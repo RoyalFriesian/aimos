@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Sarnga/agent-platform/pkg/contextdocs"
 	"github.com/Sarnga/agent-platform/pkg/contextpacks"
 	"github.com/Sarnga/agent-platform/pkg/execution"
 	"github.com/Sarnga/agent-platform/pkg/feedback"
@@ -65,6 +68,7 @@ func newTestService(t *testing.T, stub *stubCompletionClient) (*Service, *missio
 		missionStateStore,
 		executionStore,
 		feedbackStore,
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -192,7 +196,7 @@ func TestServiceRespondLoadsSystemPromptFromJSONConfig(t *testing.T) {
 	if !strings.Contains(stub.messages[0][1].Content, "Due Todos:") || !strings.Contains(stub.messages[0][1].Content, "Due Timers:") {
 		t.Fatalf("expected execution context sections in second system message, got %q", stub.messages[0][1].Content)
 	}
-	if !strings.Contains(stub.messages[0][0].Content, "Respond as JSON") {
+	if !strings.Contains(stub.messages[0][0].Content, "Respond ONLY as a JSON") {
 		t.Fatalf("expected structured output instruction in system prompt, got %q", stub.messages[0][0].Content)
 	}
 }
@@ -238,7 +242,7 @@ func TestFormatContextPackIncludesDueExecutionAndRollupFlags(t *testing.T) {
 			SetByAgentID: "ceo-root",
 			Status:       execution.TimerStatusScheduled,
 		}},
-	})
+	}, "")
 
 	for _, fragment := range []string{
 		"Overdue: todo_due, timer_due",
@@ -417,15 +421,8 @@ func TestServiceRespondBuildsStructuredDiscoveryPayloadFromJSON(t *testing.T) {
 	}
 
 	payload := decodePayload(t, response)
-	if payload["message"] != "We should clarify the ICP before solutioning." {
-		t.Fatalf("unexpected payload message: %#v", payload["message"])
-	}
-	if payload["ambitionLevel"] != "durable" {
-		t.Fatalf("unexpected ambition level: %#v", payload["ambitionLevel"])
-	}
-	assumptions, ok := payload["assumptions"].([]any)
-	if !ok || len(assumptions) != 1 || assumptions[0] != "B2B SaaS motion" {
-		t.Fatalf("unexpected assumptions: %#v", payload["assumptions"])
+	if payload["userMessage"] != "We should clarify the ICP before solutioning." {
+		t.Fatalf("unexpected payload userMessage: %#v", payload["userMessage"])
 	}
 	history, err := service.threadStore.ListMessages("thread-structured-discovery")
 	if err != nil {
@@ -458,12 +455,8 @@ func TestServiceRespondBuildsStructuredAlignmentPayloadFromJSON(t *testing.T) {
 	}
 
 	payload := decodePayload(t, response)
-	if payload["recommendedScopePosture"] != "durable" {
-		t.Fatalf("unexpected scope posture: %#v", payload["recommendedScopePosture"])
-	}
-	nextActions, ok := payload["nextActions"].([]any)
-	if !ok || len(nextActions) != 1 || nextActions[0] != "confirm tenancy model" {
-		t.Fatalf("unexpected next actions: %#v", payload["nextActions"])
+	if payload["userMessage"] != "Start with a durable admin workflow before chasing edge cases." {
+		t.Fatalf("unexpected payload userMessage: %#v", payload["userMessage"])
 	}
 }
 
@@ -722,8 +715,8 @@ func TestServiceRespondBuildsReuseAwareRoadmapPayload(t *testing.T) {
 	}
 
 	payload := decodePayload(t, response)
-	if payload["message"] != "We should adapt the retained networking rollout and split the initiative into reusable domain missions." {
-		t.Fatalf("unexpected roadmap message: %#v", payload["message"])
+	if payload["userMessage"] != "We should adapt the retained networking rollout and split the initiative into reusable domain missions." {
+		t.Fatalf("unexpected roadmap userMessage: %#v", payload["userMessage"])
 	}
 	reuseDecision, ok := payload["reuseDecision"].(map[string]any)
 	if !ok {
@@ -1711,19 +1704,231 @@ func TestNewServiceRequiresExplicitStore(t *testing.T) {
 	executionStore := execution.NewMemoryStore()
 	feedbackStore := feedback.NewMemoryStore()
 
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, nil, threadStore, missionStateStore, executionStore, feedbackStore, nil); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, nil, threadStore, missionStateStore, executionStore, feedbackStore, nil, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit mission store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, nil, missionStateStore, executionStore, feedbackStore, nil); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, nil, missionStateStore, executionStore, feedbackStore, nil, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit thread store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, nil, executionStore, feedbackStore, nil); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, nil, executionStore, feedbackStore, nil, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit mission state store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, nil, feedbackStore, nil); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, nil, feedbackStore, nil, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit execution store")
 	}
-	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, executionStore, nil, nil); err == nil {
+	if _, err := NewService(Config{APIKey: "test-key", Model: "gpt-5.4"}, &stubCompletionClient{responses: []string{"ok"}}, missionStore, threadStore, missionStateStore, executionStore, nil, nil, nil); err == nil {
 		t.Fatal("expected NewService to fail without an explicit feedback store")
+	}
+}
+
+func TestGenerateContextDocsWritesThreeDocuments(t *testing.T) {
+	resetModes(t)
+
+	overviewJSON := `{"vision":"Build a todo app","targetUser":"Developers","keyFeatures":"- Create tasks\n- Mark complete","techStack":"Go, PostgreSQL","constraints":"Ship in 2 weeks","successCriteria":"Users can manage tasks"}`
+	configJSON := `{"projectDirectory":"/tmp/myproject","languageFramework":"Go","fileConventions":"cmd/ for entry points","buildAndRun":"go run ./cmd/server","dependencies":"PostgreSQL"}`
+
+	stub := &stubCompletionClient{responses: []string{overviewJSON, configJSON}}
+	service, _, threadStore, _, _ := newTestService(t, stub)
+
+	threadID := "thread-ctx-gen"
+	seedMissionThread(t, missions.NewMemoryStore(), threadStore, "mission-ctx", threadID)
+
+	// Seed some messages so there is a conversation to summarize.
+	_ = threadStore.AppendMessage(threads.Message{
+		ID: "msg-1", ThreadID: threadID, Role: threads.RoleUser, Content: "I want to build a todo app", CreatedAt: time.Now().UTC(),
+	})
+	_ = threadStore.AppendMessage(threads.Message{
+		ID: "msg-2", ThreadID: threadID, Role: threads.RoleAssistant, Content: "Great idea, let's plan it", CreatedAt: time.Now().UTC(),
+	})
+
+	projectDir := t.TempDir()
+	service.generateContextDocs(context.Background(), threadID, projectDir, "gpt-5.4")
+
+	// Verify all three documents were created.
+	if !contextdocs.Exists(projectDir, contextdocs.DocProjectOverview, "") {
+		t.Fatal("expected PROJECT_OVERVIEW.md to exist")
+	}
+	if !contextdocs.Exists(projectDir, contextdocs.DocProjectConfig, "") {
+		t.Fatal("expected PROJECT_CONFIG.md to exist")
+	}
+	if !contextdocs.Exists(projectDir, contextdocs.DocProjectState, "") {
+		t.Fatal("expected PROJECT_STATE.md to exist")
+	}
+
+	// Verify overview content was populated from LLM response.
+	overview, err := contextdocs.ReadDocument(projectDir, contextdocs.DocProjectOverview, "")
+	if err != nil {
+		t.Fatalf("ReadDocument overview: %v", err)
+	}
+	if !strings.Contains(overview, "Build a todo app") {
+		t.Fatalf("overview missing vision content, got:\n%s", overview)
+	}
+
+	// Verify config was populated.
+	config, err := contextdocs.ReadDocument(projectDir, contextdocs.DocProjectConfig, "")
+	if err != nil {
+		t.Fatalf("ReadDocument config: %v", err)
+	}
+	if !strings.Contains(config, "Go") {
+		t.Fatalf("config missing language framework, got:\n%s", config)
+	}
+
+	// Verify state was created with initial placeholder content.
+	state, err := contextdocs.ReadDocument(projectDir, contextdocs.DocProjectState, "")
+	if err != nil {
+		t.Fatalf("ReadDocument state: %v", err)
+	}
+	if !strings.Contains(state, "None yet") {
+		t.Fatalf("state missing initial placeholder, got:\n%s", state)
+	}
+
+	// Verify that 2 LLM calls were made (overview + config).
+	if stub.calls != 2 {
+		t.Fatalf("expected 2 LLM calls, got %d", stub.calls)
+	}
+}
+
+func TestGenerateContextDocsTriggersReindex(t *testing.T) {
+	resetModes(t)
+
+	stub := &stubCompletionClient{responses: []string{
+		`{"vision":"v","targetUser":"u","keyFeatures":"f","techStack":"t","constraints":"c","successCriteria":"s"}`,
+		`{"projectDirectory":"d","languageFramework":"l","fileConventions":"f","buildAndRun":"b","dependencies":"d"}`,
+	}}
+	service, _, threadStore, _, _ := newTestService(t, stub)
+
+	threadID := "thread-reindex"
+	seedMissionThread(t, missions.NewMemoryStore(), threadStore, "mission-reindex", threadID)
+	_ = threadStore.AppendMessage(threads.Message{
+		ID: "msg-1", ThreadID: threadID, Role: threads.RoleUser, Content: "Build a thing", CreatedAt: time.Now().UTC(),
+	})
+
+	projectDir := t.TempDir()
+	reindexCalled := false
+	service.SetOnFilesChanged(func(_ context.Context, path string) {
+		reindexCalled = true
+		if path != projectDir {
+			t.Errorf("expected reindex path %q, got %q", projectDir, path)
+		}
+	})
+
+	service.generateContextDocs(context.Background(), threadID, projectDir, "gpt-5.4")
+
+	if !reindexCalled {
+		t.Fatal("expected OnFilesChanged to be called after generating context docs")
+	}
+}
+
+func TestParseOverviewJSONHandlesMarkdownFences(t *testing.T) {
+	raw := "```json\n{\"vision\":\"v\",\"targetUser\":\"u\",\"keyFeatures\":\"f\",\"techStack\":\"t\",\"constraints\":\"c\",\"successCriteria\":\"s\"}\n```"
+	result, err := parseOverviewJSON(raw)
+	if err != nil {
+		t.Fatalf("parseOverviewJSON: %v", err)
+	}
+	if result.Vision != "v" {
+		t.Fatalf("expected vision %q, got %q", "v", result.Vision)
+	}
+}
+
+func TestParseConfigJSONHandlesMarkdownFences(t *testing.T) {
+	raw := "```json\n{\"projectDirectory\":\"d\",\"languageFramework\":\"l\",\"fileConventions\":\"f\",\"buildAndRun\":\"b\",\"dependencies\":\"d\"}\n```"
+	result, err := parseConfigJSON(raw)
+	if err != nil {
+		t.Fatalf("parseConfigJSON: %v", err)
+	}
+	if result.LanguageFramework != "l" {
+		t.Fatalf("expected languageFramework %q, got %q", "l", result.LanguageFramework)
+	}
+}
+
+func TestRespondGeneratesContextDocsOnPlanningMode(t *testing.T) {
+	resetModes(t)
+
+	overviewJSON := `{"vision":"v","targetUser":"u","keyFeatures":"f","techStack":"t","constraints":"c","successCriteria":"s"}`
+	configJSON := `{"projectDirectory":"d","languageFramework":"l","fileConventions":"f","buildAndRun":"b","dependencies":"d"}`
+
+	// Stub responses: overview LLM, config LLM, then the actual CEO response via GenerateFromMessages.
+	stub := &stubCompletionClient{responses: []string{overviewJSON, configJSON, "Here is the plan."}}
+	service, missionStore, threadStore, _, _ := newTestService(t, stub)
+
+	missionID := "mission-plan"
+	threadID := "thread-plan"
+	seedMissionThread(t, missionStore, threadStore, missionID, threadID)
+
+	// Seed prior conversation so the thread has content.
+	_ = threadStore.AppendMessage(threads.Message{
+		ID: "msg-1", ThreadID: threadID, Role: threads.RoleUser, Content: "I want to build a CRM", CreatedAt: time.Now().UTC(),
+	})
+	_ = threadStore.AppendMessage(threads.Message{
+		ID: "msg-2", ThreadID: threadID, Role: threads.RoleAssistant, Content: "Let's align on scope", CreatedAt: time.Now().UTC(),
+	})
+
+	// Create a temp dir for the project and make the service resolve to it.
+	projectDir := t.TempDir()
+	// Seed a user message with Location: so resolveProjectLocation finds it.
+	_ = threadStore.AppendMessage(threads.Message{
+		ID: "msg-loc", ThreadID: threadID, Role: threads.RoleUser,
+		Content: fmt.Sprintf("Location: %s\nLet me see the plan", projectDir), CreatedAt: time.Now().UTC(),
+	})
+
+	contextPayload, _ := json.Marshal(map[string]any{"mode": ModeHighLevelPlan, "missionId": missionID})
+	_, err := service.Respond(context.Background(), Request{
+		Prompt:    "Show me the high-level plan.",
+		Context:   contextPayload,
+		MissionID: missionID,
+		ThreadID:  threadID,
+		TraceID:   "trace-plan",
+	})
+	if err != nil {
+		t.Fatalf("Respond returned error: %v", err)
+	}
+
+	// Verify that context docs were generated.
+	if !contextdocs.Exists(projectDir, contextdocs.DocProjectOverview, "") {
+		t.Fatal("expected PROJECT_OVERVIEW.md to be generated on high_level_plan mode")
+	}
+
+	// Verify that 3 LLM calls were made: overview, config, then the plan response.
+	if stub.calls != 3 {
+		t.Fatalf("expected 3 LLM calls (overview + config + plan), got %d", stub.calls)
+	}
+}
+
+func TestRespondSkipsDocGenerationWhenDocsAlreadyExist(t *testing.T) {
+	resetModes(t)
+
+	stub := &stubCompletionClient{responses: []string{"Here is the plan."}}
+	service, missionStore, threadStore, _, _ := newTestService(t, stub)
+
+	missionID := "mission-skip"
+	threadID := "thread-skip"
+	seedMissionThread(t, missionStore, threadStore, missionID, threadID)
+
+	projectDir := t.TempDir()
+	_ = threadStore.AppendMessage(threads.Message{
+		ID: "msg-loc", ThreadID: threadID, Role: threads.RoleUser,
+		Content: fmt.Sprintf("Location: %s", projectDir), CreatedAt: time.Now().UTC(),
+	})
+
+	// Pre-create the overview doc so generation is skipped.
+	contextDir := filepath.Join(projectDir, contextdocs.ContextDir)
+	_ = os.MkdirAll(contextDir, 0o755)
+	_ = os.WriteFile(filepath.Join(contextDir, "PROJECT_OVERVIEW.md"), []byte("# Existing"), 0o644)
+
+	contextPayload, _ := json.Marshal(map[string]any{"mode": ModeHighLevelPlan, "missionId": missionID})
+	_, err := service.Respond(context.Background(), Request{
+		Prompt:    "Show me the plan.",
+		Context:   contextPayload,
+		MissionID: missionID,
+		ThreadID:  threadID,
+		TraceID:   "trace-skip",
+	})
+	if err != nil {
+		t.Fatalf("Respond returned error: %v", err)
+	}
+
+	// Only 1 LLM call (the plan response), no doc generation calls.
+	if stub.calls != 1 {
+		t.Fatalf("expected 1 LLM call (plan only), got %d", stub.calls)
 	}
 }

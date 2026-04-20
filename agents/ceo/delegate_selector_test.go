@@ -1,6 +1,7 @@
 package ceo
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Sarnga/agent-platform/pkg/agents"
@@ -13,7 +14,7 @@ func TestDelegateSelectorChoosesDirectoryMatchByCapabilities(t *testing.T) {
 		t.Fatalf("newDelegateSelector returned error: %v", err)
 	}
 
-	requirement, selection, err := selector.SelectDelegate(missions.Mission{
+	requirement, selection, err := selector.SelectDelegate(context.Background(), nil, missions.Mission{
 		ID:             "mission-network",
 		MissionType:    "domain",
 		Title:          "Networking foundation",
@@ -63,7 +64,7 @@ func TestDelegateSelectorChoosesDirectoryMatchByCapabilities(t *testing.T) {
 func TestDelegateSelectorFallsBackWhenDirectoryCannotSatisfyRequirement(t *testing.T) {
 	selector := &delegateSelector{directory: emptyDelegateDirectory{}}
 
-	_, selection, err := selector.SelectDelegate(missions.Mission{
+	_, selection, err := selector.SelectDelegate(context.Background(), nil, missions.Mission{
 		ID:             "mission-identity",
 		MissionType:    "domain",
 		Title:          "Identity plane",

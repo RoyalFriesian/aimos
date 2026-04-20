@@ -132,6 +132,8 @@ const (
 	ActionScheduleTimer ActionType = "schedule_timer"
 	ActionCancelTimer   ActionType = "cancel_timer"
 	ActionReindex       ActionType = "reindex"
+	ActionApproveTeam   ActionType = "approve_team"
+	ActionRejectTeam    ActionType = "reject_team"
 )
 
 type ActionRequest struct {
@@ -186,7 +188,7 @@ func (r Request) Validate() error {
 
 func (a ActionRequest) Validate() error {
 	switch a.Type {
-	case ActionCreateTodo, ActionAssignTodo, ActionBlockTodo, ActionCompleteTodo, ActionScheduleTimer, ActionCancelTimer:
+	case ActionCreateTodo, ActionAssignTodo, ActionBlockTodo, ActionCompleteTodo, ActionScheduleTimer, ActionCancelTimer, ActionApproveTeam, ActionRejectTeam:
 		return nil
 	case "":
 		return logValidationError("invalid CEO action request", errors.New("action type is required"))

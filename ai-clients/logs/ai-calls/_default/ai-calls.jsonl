@@ -1,0 +1,12 @@
+{"timestamp":"2026-04-19T18:33:50.992548Z","direction":"request","method":"Generate","model":"qwen2.5-coder:7b","tokensEst":2,"details":{"system_len":3,"user_len":3}}
+{"timestamp":"2026-04-19T18:33:50.993072Z","direction":"response","method":"Generate","model":"qwen2.5-coder:7b","tokensEst":4,"details":{"response_len":15}}
+{"timestamp":"2026-04-19T18:33:50.993177Z","direction":"request","method":"Generate","model":"gpt-5.4","tokensEst":2,"details":{"system_len":3,"user_len":3}}
+{"timestamp":"2026-04-19T18:33:50.993225Z","direction":"response","method":"Generate","model":"gpt-5.4","tokensEst":0,"error":"no LLM provider configured for model \"gpt-5.4\""}
+{"timestamp":"2026-04-19T18:33:51.969664Z","direction":"request","method":"Generate","model":"gpt-5.4","tokensEst":3,"details":{"system_len":3,"user_len":5}}
+{"timestamp":"2026-04-19T18:33:52.021224Z","direction":"response","method":"Generate","model":"gpt-5.4","tokensEst":6,"durationMs":51,"details":{"response_len":22}}
+{"timestamp":"2026-04-19T19:00:48.85865Z","direction":"request","method":"Generate","model":"qwen2.5-coder:7b","tokensEst":2,"input":{"system":"sys","user":"usr"},"details":{"system_len":3,"user_len":3}}
+{"timestamp":"2026-04-19T19:00:48.859554Z","direction":"response","method":"Generate","model":"qwen2.5-coder:7b","tokensEst":4,"output":"Ollama response","details":{"response_len":15}}
+{"timestamp":"2026-04-19T19:00:48.859707Z","direction":"request","method":"Generate","model":"gpt-5.4","tokensEst":2,"input":{"system":"sys","user":"usr"},"details":{"system_len":3,"user_len":3}}
+{"timestamp":"2026-04-19T19:00:48.859779Z","direction":"response","method":"Generate","model":"gpt-5.4","tokensEst":0,"error":"no LLM provider configured for model \"gpt-5.4\""}
+{"timestamp":"2026-04-19T19:00:49.829718Z","direction":"request","method":"Generate","model":"gpt-5.4","tokensEst":3,"input":{"system":"sys","user":"hello"},"details":{"system_len":3,"user_len":5}}
+{"timestamp":"2026-04-19T19:00:49.881463Z","direction":"response","method":"Generate","model":"gpt-5.4","tokensEst":6,"durationMs":51,"output":"Routed through pigeon!","details":{"response_len":22}}

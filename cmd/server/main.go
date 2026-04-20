@@ -34,9 +34,10 @@ func main() {
 
 	var opts []app.ServerOption
 
-	// Wire up knowledge service if API key is available
+	// Wire up knowledge service if API key is available and not explicitly disabled.
+	knowledgeEnabled := os.Getenv("KNOWLEDGE_ENABLED")
 	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey != "" {
+	if apiKey != "" && knowledgeEnabled != "false" {
 		knowledgeModel := os.Getenv("KNOWLEDGE_MODEL")
 		if knowledgeModel == "" {
 			knowledgeModel = "gpt-4o-mini"
@@ -59,6 +60,7 @@ func main() {
 		llm := &llmAdapter{client: oc}
 		ks := app.NewKnowledgeService(llm, cfg)
 		opts = append(opts, app.WithKnowledge(ks))
+		service.SetOnFilesChanged(ks.ReindexInBackground)
 		log.Printf("Knowledge service enabled (model=%s, index=%s, query=%s, reasoning=%s)",
 			knowledgeModel, cfg.GetIndexModel(), cfg.GetQueryModel(), cfg.GetReasoningModel())
 	}

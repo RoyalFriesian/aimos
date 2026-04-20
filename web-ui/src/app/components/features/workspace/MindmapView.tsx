@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -14,16 +14,20 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { ThreadNode } from './ThreadNode';
+import { AgentNodeView } from './AgentNodeView';
 import { ChatPanel } from '../chat/ChatPanel';
 import { Button } from '../../ui/button';
-import { Network, ZoomIn, ZoomOut, Maximize2, FolderRoot, Wrench, Eye } from 'lucide-react';
-import { Thread } from '../../../types';
+import { Network, FolderRoot, Wrench, Eye, Pause, Play } from 'lucide-react';
+import { Thread, AgentNodeType } from '../../../types';
 import { mockThreads } from '../../../data/mockData';
 import { useTheme } from '../../ThemeProvider';
 import { ThemeToggle } from '../../ThemeToggle';
+import { useAppStore } from '../../../store/useAppStore';
+import { pauseProject, resumeProject, getAgentStatuses } from '../../../api/client';
 
 const nodeTypes = {
   threadNode: ThreadNode,
+  agentNode: AgentNodeView,
 };
 
 /**
@@ -47,13 +51,78 @@ export function MindmapView({ onCEOClick, isSidebarCollapsed, activeView = 'mind
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [projectPaused, setProjectPaused] = useState(false);
   const { theme } = useTheme();
   const { setCenter } = useReactFlow();
+  const agentNodes = useAppStore((s) => s.agentNodes);
+  const setAgentNodes = useAppStore((s) => s.setAgentNodes);
+  const activeProject = useAppStore((s) => s.projects.find((p) => p.active));
+  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-  // Calculate layout for nodes
-  const calculateLayout = useCallback((threads: Thread[]) => {
+  const activeThreads = initialThreads || mockThreads;
+  const hasAgentNodes = agentNodes && agentNodes.length > 0;
+
+  // Layout for agent nodes (primary mode)
+  const calculateAgentLayout = useCallback((agents: AgentNodeType[]) => {
+    const levelMap = new Map<string, number>();
+
+    const calculateLevel = (agentId: string, level: number = 0) => {
+      levelMap.set(agentId, level);
+      agents.filter(a => a.parentAgentId === agentId).forEach(child => calculateLevel(child.id, level + 1));
+    };
+
+    const root = agents.find(a => !a.parentAgentId);
+    if (root) calculateLevel(root.id);
+
+    const levelGroups = new Map<number, AgentNodeType[]>();
+    agents.forEach(agent => {
+      const level = levelMap.get(agent.id) || 0;
+      if (!levelGroups.has(level)) levelGroups.set(level, []);
+      levelGroups.get(level)!.push(agent);
+    });
+
+    const newNodes: Node[] = [];
+    const verticalSpacing = 400;
+    const horizontalSpacing = 500;
+
+    levelGroups.forEach((levelAgents, level) => {
+      const totalWidth = (levelAgents.length - 1) * horizontalSpacing;
+      const startX = -totalWidth / 2;
+      levelAgents.forEach((agent, index) => {
+        const thread = activeThreads.find(t => t.id === agent.threadId);
+        newNodes.push({
+          id: agent.id,
+          type: 'agentNode',
+          position: { x: startX + index * horizontalSpacing, y: level * verticalSpacing },
+          data: {
+            agent: { ...agent, childIds: agents.filter(c => c.parentAgentId === agent.id).map(c => c.id) },
+            thread: thread ? { messages: thread.messages.length, status: thread.stats.status } : null,
+            isSelected: selectedThread?.id === agent.threadId,
+            isCEO: !agent.parentAgentId,
+          },
+        });
+      });
+    });
+
+    const newEdges: Edge[] = agents
+      .filter(a => a.parentAgentId)
+      .map(a => ({
+        id: `${a.parentAgentId}-${a.id}`,
+        source: a.parentAgentId!,
+        target: a.id,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: '#3b82f6', strokeWidth: 2 },
+      }));
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+  }, [selectedThread, setNodes, setEdges, activeThreads]);
+
+  // Fallback layout for threads (when no agent nodes exist yet)
+  const calculateThreadLayout = useCallback((threads: Thread[]) => {
     const levelMap = new Map<string, number>();
     const childrenMap = new Map<string, string[]>();
     
@@ -127,22 +196,68 @@ export function MindmapView({ onCEOClick, isSidebarCollapsed, activeView = 'mind
     setEdges(newEdges);
   }, [selectedThread, setNodes, setEdges]);
 
-  const activeThreads = initialThreads || mockThreads;
-
   useEffect(() => {
     if (activeView === 'onboarding') {
       setNodes([]);
       setEdges([]);
+    } else if (hasAgentNodes) {
+      calculateAgentLayout(agentNodes!);
     } else {
-      calculateLayout(activeThreads);
+      calculateThreadLayout(activeThreads);
     }
-  }, [calculateLayout, activeView, setNodes, setEdges, activeThreads]);
+  }, [calculateAgentLayout, calculateThreadLayout, activeView, setNodes, setEdges, activeThreads, hasAgentNodes, agentNodes]);
+
+  // Poll agent loop statuses every 5s to update timer countdowns, paused state, and model
+  useEffect(() => {
+    if (!hasAgentNodes || !activeProject?.rootThreadId) return;
+    const projectId = activeProject.rootThreadId;
+
+    const pollStatuses = async () => {
+      try {
+        const statuses = await getAgentStatuses(projectId);
+        if (!statuses || statuses.length === 0) return;
+        const statusMap = new Map(statuses.map(s => [s.agentId, s]));
+        setAgentNodes(
+          (agentNodes || []).map(a => {
+            const st = statusMap.get(a.id);
+            if (!st) return a;
+            return { ...a, nextWakeAt: st.nextWakeAt, wakeIntervalSeconds: st.intervalSeconds, paused: st.paused, model: st.model || a.model };
+          })
+        );
+      } catch { /* ignore polling errors */ }
+    };
+
+    pollStatuses();
+    statusPollRef.current = setInterval(pollStatuses, 5000);
+    return () => { if (statusPollRef.current) clearInterval(statusPollRef.current); };
+  }, [hasAgentNodes, activeProject?.rootThreadId]);
+
+  const handleTogglePause = async () => {
+    if (!activeProject?.rootThreadId) return;
+    const projectId = activeProject.rootThreadId;
+    try {
+      if (projectPaused) {
+        await resumeProject(projectId);
+        setProjectPaused(false);
+      } else {
+        await pauseProject(projectId);
+        setProjectPaused(true);
+      }
+    } catch (err) {
+      console.error('Failed to toggle pause:', err);
+    }
+  };
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    const thread = activeThreads.find(t => t.id === node.id);
+    let thread: Thread | undefined;
+    if (hasAgentNodes) {
+      const agent = agentNodes!.find(a => a.id === node.id);
+      if (agent) thread = activeThreads.find(t => t.id === agent.threadId);
+    } else {
+      thread = activeThreads.find(t => t.id === node.id);
+    }
     if (thread) {
       setSelectedThread(thread);
-      // Update node selection
       setNodes(nodes => 
         nodes.map(n => ({
           ...n,
@@ -154,22 +269,33 @@ export function MindmapView({ onCEOClick, isSidebarCollapsed, activeView = 'mind
       );
       setCenter(node.position.x + 160, node.position.y + 120, { zoom: 1.2, duration: 800 });
     }
-  }, [setNodes, setCenter, activeThreads]);
+  }, [setNodes, setCenter, activeThreads, hasAgentNodes, agentNodes]);
 
   const handleCEOClick = () => {
-    const ceoThread = activeThreads.find(t => t.parentId === null);
-    if (ceoThread) {
+    let ceoThread: Thread | undefined;
+    let ceoNodeId: string | undefined;
+    if (hasAgentNodes) {
+      const ceoAgent = agentNodes!.find(a => !a.parentAgentId);
+      if (ceoAgent) {
+        ceoThread = activeThreads.find(t => t.id === ceoAgent.threadId);
+        ceoNodeId = ceoAgent.id;
+      }
+    } else {
+      ceoThread = activeThreads.find(t => t.parentId === null);
+      ceoNodeId = ceoThread?.id;
+    }
+    if (ceoThread && ceoNodeId) {
       setSelectedThread(ceoThread);
       setNodes(nodes => 
         nodes.map(n => ({
           ...n,
           data: {
             ...n.data,
-            isSelected: n.id === ceoThread.id,
+            isSelected: n.id === ceoNodeId,
           },
         }))
       );
-      const ceoNode = nodes.find(n => n.id === ceoThread.id);
+      const ceoNode = nodes.find(n => n.id === ceoNodeId);
       if (ceoNode) {
         setCenter(ceoNode.position.x + 160, ceoNode.position.y + 120, { zoom: 1.2, duration: 800 });
       }
@@ -209,6 +335,15 @@ export function MindmapView({ onCEOClick, isSidebarCollapsed, activeView = 'mind
             pannable
             zoomable
             nodeColor={(node) => {
+              if (hasAgentNodes) {
+                const agent = agentNodes!.find(a => a.id === node.id);
+                if (!agent?.parentAgentId) return '#8b5cf6';
+                switch (agent?.role) {
+                  case 'Manager': return '#3b82f6';
+                  case 'Worker': return '#10b981';
+                  default: return '#4b5563';
+                }
+              }
               const thread = activeThreads.find(t => t.id === node.id);
               if (thread?.parentId === null) return '#8b5cf6';
               switch (thread?.stats.status) {
@@ -227,6 +362,27 @@ export function MindmapView({ onCEOClick, isSidebarCollapsed, activeView = 'mind
         <Panel position="top-right" className="m-4 flex items-center gap-3">
           {activeView !== 'onboarding' && (
             <>
+              {hasAgentNodes && (
+                <button
+                  onClick={handleTogglePause}
+                  className={`p-3 rounded-full border transition-colors shadow-sm focus:outline-none flex items-center gap-2 group ${
+                    projectPaused
+                      ? 'bg-amber-500/20 dark:bg-amber-400/20 border-amber-500/40 hover:bg-amber-500/30'
+                      : 'bg-white dark:bg-[#1e2230] border-gray-200 dark:border-[#2a2f42] hover:bg-gray-100 dark:hover:bg-[#2a2f42]'
+                  }`}
+                  title={projectPaused ? 'Resume All Agents' : 'Pause All Agents'}
+                >
+                  {projectPaused ? (
+                    <Play className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+                  ) : (
+                    <Pause className="h-5 w-5 text-gray-600 dark:text-gray-300 group-hover:text-amber-600 dark:group-hover:text-amber-400" />
+                  )}
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {projectPaused ? 'Resume' : 'Pause'}
+                  </span>
+                </button>
+              )}
+
               <button className="p-3 rounded-full bg-white dark:bg-[#1e2230] border border-gray-200 dark:border-[#2a2f42] hover:bg-gray-100 dark:hover:bg-[#2a2f42] transition-colors shadow-sm focus:outline-none flex items-center gap-2 group" title="Project Folder">
                 <FolderRoot className="h-5 w-5 text-gray-600 dark:text-gray-300 group-hover:text-purple-600 dark:group-hover:text-purple-400" />
               </button>

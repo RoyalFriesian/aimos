@@ -108,7 +108,40 @@ export interface Thread {
 }
 
 // ---------------------------------------------------------------------------
-// CEO structured response payload types (one per conversation mode)
+// Agent Node — the mindmap entity (each node = an AI agent)
+// ---------------------------------------------------------------------------
+
+export type AgentNodeRole = 'CEO' | 'Manager' | 'Worker';
+
+/**
+ * An AI agent in the recursive problem-decomposition tree.
+ * Each node owns one Thread (its conversation channel).
+ * The mindmap renders AgentNodes, not raw threads.
+ */
+export interface AgentNodeType {
+  id: string;
+  parentAgentId: string | null;
+  rootAgentId: string;
+  projectId: string;
+  threadId: string;
+  missionId: string;
+  name: string;
+  role: AgentNodeRole;
+  problemStatement: string;
+  status: string;
+  model?: string;
+  paused?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** Computed client-side: direct child agent IDs */
+  childIds?: string[];
+  /** Runtime data from loop status polling */
+  nextWakeAt?: string;
+  wakeIntervalSeconds?: number;
+}
+
+// ---------------------------------------------------------------------------
+// CEO structured response payload types (unified format)
 // ---------------------------------------------------------------------------
 
 export type CEOMode =
@@ -119,84 +152,59 @@ export type CEOMode =
   | 'execution_prep'
   | 'review';
 
-/** Common fields present on every CEO structured payload. */
-interface CEOPayloadBase {
+/** A structured question the CEO needs answered. */
+export interface CEOQuestionItem {
+  id: string;
+  text: string;
+  options: string[];
+  allowCustom: boolean;
+}
+
+/** One proposed team member. */
+export interface CEOTeamMember {
+  role: string;
+  name: string;
+  capabilities: string[];
+  missionTitle: string;
+  missionDescription: string;
+}
+
+/** A team proposal for user review before execution. */
+export interface CEOTeamProposal {
+  summary: string;
+  members: CEOTeamMember[];
+}
+
+/** Unified CEO response payload — every mode uses this shape. */
+export interface CEOResponsePayload {
   mode: CEOMode;
   model?: string;
-  message: string;
-}
-
-/** Phased ambition level (object form returned by discovery mode). */
-export interface AmbitionLevel {
-  recommended: string;
-  why: string[];
-  possiblePhases: string[];
-}
-
-export interface CEODiscoveryPayload extends CEOPayloadBase {
-  mode: 'discovery';
-  assumptions: string[];
-  gaps: string[];
-  accessNeeds: string[];
-  ambitionLevel: string | AmbitionLevel;
-  successCriteria: string[];
-  nextQuestions: string[];
-}
-
-export interface CEOAlignmentPayload extends CEOPayloadBase {
-  mode: 'alignment';
-  recommendedScopePosture: string;
-  tradeoffs: string[];
-  decisionPoints: string[];
-  accessNeeds: string[];
-  risks: string[];
-  nextActions: string[];
-}
-
-export interface CEOHighLevelPlanPayload extends CEOPayloadBase {
-  mode: 'high_level_plan';
-  vision: string;
-  value: string;
-  accessNeeds: string[];
-  workstreams: string[];
-  risks: string[];
-  stagePlan: string[];
-  assumptions: string[];
-  decisionNeeds: string[];
-}
-
-export interface CEOGenericPayload extends CEOPayloadBase {
+  /** Internal CEO reasoning (shown in collapsible thinking block). */
+  thinking?: string;
+  /** Client-facing message in clean markdown prose. */
+  userMessage: string;
+  /** Structured questions for the user (rendered as wizard). */
+  questions?: CEOQuestionItem[];
+  /** Proposed team for user review (execution_prep mode). */
+  teamProposal?: CEOTeamProposal;
+  /** Legacy field — older responses used "message" instead of "userMessage". */
+  message?: string;
+  /** Any extra payload fields (roadmap-specific data, etc). */
   [key: string]: unknown;
-}
-
-/** Discriminated union of all CEO response payload shapes. */
-export type CEOResponsePayload =
-  | CEODiscoveryPayload
-  | CEOAlignmentPayload
-  | CEOHighLevelPlanPayload
-  | CEOGenericPayload;
-
-// ---------------------------------------------------------------------------
-// Type guards
-// ---------------------------------------------------------------------------
-
-export function isDiscoveryPayload(p: CEOResponsePayload): p is CEODiscoveryPayload {
-  return p.mode === 'discovery';
-}
-
-export function isAlignmentPayload(p: CEOResponsePayload): p is CEOAlignmentPayload {
-  return p.mode === 'alignment';
-}
-
-export function isHighLevelPlanPayload(p: CEOResponsePayload): p is CEOHighLevelPlanPayload {
-  return p.mode === 'high_level_plan';
 }
 
 /** Attempt to coerce an unknown payload into a typed CEO response. */
 export function parseCEOPayload(raw: unknown): CEOResponsePayload | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
-  if (typeof obj.message !== 'string' || !obj.message) return null;
+
+  // Support both new "userMessage" and legacy "message" field
+  let userMessage = typeof obj.userMessage === 'string' ? obj.userMessage : '';
+  if (!userMessage && typeof obj.message === 'string') {
+    userMessage = obj.message;
+  }
+  if (!userMessage) return null;
+
   const mode = (typeof obj.mode === 'string' ? obj.mode : 'discovery') as CEOMode;
-  return { ...obj, mode, message: obj.message } as CEOResponsePayload;
+  return { ...obj, mode, userMessage } as CEOResponsePayload;
 }

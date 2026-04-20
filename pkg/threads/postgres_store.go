@@ -107,6 +107,34 @@ func (s *PostgresStore) ListByMission(missionID string) ([]Thread, error) {
 	return threadsForMission, rows.Err()
 }
 
+func (s *PostgresStore) ListByRootMission(rootMissionID string) ([]Thread, error) {
+	rows, err := s.pool.Query(context.Background(), `
+		SELECT thread_id, mission_id, root_mission_id, COALESCE(parent_thread_id, ''), thread_kind, title,
+			summary, context, owner_agent_id, current_mode, status, waiting_until, created_at, updated_at
+		FROM threads
+		WHERE root_mission_id = $1 OR mission_id = $1
+		ORDER BY created_at ASC
+	`, rootMissionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []Thread
+	for rows.Next() {
+		var thread Thread
+		if err := rows.Scan(
+			&thread.ID, &thread.MissionID, &thread.RootMissionID, &thread.ParentThreadID, &thread.Kind, &thread.Title,
+			&thread.Summary, &thread.Context, &thread.OwnerAgentID, &thread.CurrentMode, &thread.Status,
+			&thread.WaitingUntil, &thread.CreatedAt, &thread.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, thread)
+	}
+	return result, rows.Err()
+}
+
 func (s *PostgresStore) SearchReusableThreads(query string, limit int) ([]ReusableThreadMatch, error) {
 	rows, err := s.pool.Query(context.Background(), `
 		SELECT thread_id, mission_id, root_mission_id, COALESCE(parent_thread_id, ''), thread_kind, title,
@@ -339,6 +367,22 @@ func (s *PostgresStore) UpdateThreadTitle(threadID string, title string) error {
 	tag, err := s.pool.Exec(context.Background(), query, threadID, title)
 	if err != nil {
 		return fmt.Errorf("failed to update thread title: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrThreadNotFound
+	}
+	return nil
+}
+
+func (s *PostgresStore) UpdateThreadStatus(threadID string, status ThreadStatus) error {
+	query := `
+		UPDATE threads
+		SET status = $2, updated_at = CURRENT_TIMESTAMP
+		WHERE thread_id = $1
+	`
+	tag, err := s.pool.Exec(context.Background(), query, threadID, string(status))
+	if err != nil {
+		return fmt.Errorf("failed to update thread status: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrThreadNotFound

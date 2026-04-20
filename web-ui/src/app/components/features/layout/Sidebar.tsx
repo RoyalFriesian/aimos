@@ -30,6 +30,8 @@ interface SidebarProps {
   onSelectProject?: (projectId: string) => void;
   /** Handler to open the Knowledge Base view */
   onOpenKnowledge?: () => void;
+  /** Handler to open the Settings modal */
+  onOpenSettings?: () => void;
 }
 
 /**
@@ -46,7 +48,8 @@ export function Sidebar({
   ],
   onUpdateProject,
   onSelectProject,
-  onOpenKnowledge
+  onOpenKnowledge,
+  onOpenSettings
 }: SidebarProps) {
   const [projectToRename, setProjectToRename] = useState<Project | null>(null);
   const [newProjectName, setNewProjectName] = useState('');
@@ -165,7 +168,10 @@ export function Sidebar({
           <Database className="w-4 h-4" />
           {!isCollapsed && <span>Knowledge</span>}
         </button>
-        <button className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground ${isCollapsed ? 'justify-center' : ''}`}>
+        <button
+          onClick={onOpenSettings}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground ${isCollapsed ? 'justify-center' : ''}`}
+        >
           <Settings className="w-4 h-4" />
           {!isCollapsed && <span>Settings</span>}
         </button>

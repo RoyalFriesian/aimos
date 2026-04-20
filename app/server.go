@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
+	aiclients "github.com/Sarnga/agent-platform/ai-clients"
 	"github.com/Sarnga/agent-platform/agents/ceo"
+	"github.com/Sarnga/agent-platform/pkg/agents"
 	"github.com/Sarnga/agent-platform/pkg/feedback"
 	"github.com/Sarnga/agent-platform/pkg/threads"
 )
@@ -19,12 +22,24 @@ type CEOService interface {
 	SubmitFeedback(ctx context.Context, submission ceo.FeedbackSubmission) (feedback.Record, error)
 	GenerateProjectName(ctx context.Context, prompt string) (string, error)
 	ListOpenAIModels(ctx context.Context) ([]string, error)
+	ListOllamaModels(ctx context.Context) ([]string, error)
+	GetLLMProviderStatus(ctx context.Context) (ceo.LLMProviderStatus, error)
+	SwitchLLMProvider(ctx context.Context, provider string, ceoModel string, workerModel string) error
 	UploadProjectAttachments(ctx context.Context, threadID string, projectLocation string, files []ceo.ProjectAttachmentInput) ([]ceo.StoredProjectAttachment, error)
 	RenameProject(ctx context.Context, threadID string, newName string) error
 	ListRootThreads(ctx context.Context) ([]threads.Thread, error)
 	LoadProject(ctx context.Context, threadID string) ([]threads.Thread, map[string][]threads.Message, error)
+	LoadProjectAgents(ctx context.Context, projectID string) ([]agents.AgentNode, error)
 	RefinePrompt(ctx context.Context, rawPrompt string, model string) (string, error)
 	ModelGuidance(ctx context.Context, projectDescription string, availableModels []string, model string) (string, error)
+	PauseProject(ctx context.Context, projectID string) error
+	ResumeProject(ctx context.Context, projectID string) error
+	UpdateAgentModel(ctx context.Context, agentID string, model string) error
+	GetAgentStatuses(ctx context.Context, projectID string) ([]agents.LoopStatus, error)
+	GetTokenBudgetConfig() aiclients.BudgetSnapshot
+	UpdateTokenBudgetConfig(enabled *bool, threshold *int64, target *int64) aiclients.BudgetSnapshot
+	GetWakeIntervalConfig() agents.WakeIntervalSnapshot
+	UpdateWakeIntervalConfig(ceoSec *int64, managerSec *int64, workerSec *int64) agents.WakeIntervalSnapshot
 }
 
 // ServerOption configures optional features on the HTTP server.
@@ -65,6 +80,14 @@ func NewServer(service CEOService, opts ...ServerOption) (*Server, error) {
 	mux.HandleFunc("/api/ceo/feedback", server.handleFeedback)
 	mux.HandleFunc("/api/ceo/refine-prompt", server.handleRefinePrompt)
 	mux.HandleFunc("/api/ceo/model-guidance", server.handleModelGuidance)
+	mux.HandleFunc("/api/projects/pause", server.handlePauseProject)
+	mux.HandleFunc("/api/projects/resume", server.handleResumeProject)
+	mux.HandleFunc("/api/agents/model", server.handleUpdateAgentModel)
+	mux.HandleFunc("/api/agents/status", server.handleGetAgentStatuses)
+	mux.HandleFunc("/api/settings/llm-provider", server.handleLLMProvider)
+	mux.HandleFunc("/api/ollama/models", server.handleListOllamaModels)
+	mux.HandleFunc("/api/settings/token-budget", server.handleTokenBudget)
+	mux.HandleFunc("/api/settings/wake-interval", server.handleWakeInterval)
 
 	if server.knowledge != nil {
 		server.knowledge.RegisterRoutes(mux)
@@ -126,7 +149,11 @@ func (s *Server) handleRespond(writer http.ResponseWriter, request *http.Request
 
 	s.enrichRequestWithKnowledge(request.Context(), &payload)
 
-	response, err := s.service.Respond(request.Context(), payload)
+	// Use a detached context so the LLM call survives client disconnects.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	response, err := s.service.Respond(ctx, payload)
 	if err != nil {
 		writeError(writer, statusForError(err), err.Error())
 		return
@@ -292,9 +319,11 @@ func (s *Server) handleLoadProject(writer http.ResponseWriter, request *http.Req
 		writeError(writer, statusForError(err), err.Error())
 		return
 	}
+	agentNodes, _ := s.service.LoadProjectAgents(request.Context(), payload.ThreadID)
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"threads":  projectThreads,
 		"messages": msgsMap,
+		"agents":   agentNodes,
 	})
 }
 
@@ -467,6 +496,20 @@ func (s *Server) enrichRequestWithKnowledge(_ context.Context, payload *ceo.Requ
 	if !found {
 		found, _ = s.knowledge.CheckIndex(projectPath, "")
 		if !found {
+			// No index exists yet — provide project path awareness and trigger initial indexing
+			payload.KnowledgeSummary = fmt.Sprintf(
+				"[Project Path Awareness]\n"+
+					"Project path: %s\n"+
+					"The codebase has not been indexed yet. An initial index is being started now.\n"+
+					"You have awareness of this project path. If the directory is empty or newly created, "+
+					"this is a fresh project — proceed with planning for a new build.\n"+
+					"If the directory contains existing code, the index will be available shortly and you will "+
+					"have full codebase knowledge on subsequent turns.\n"+
+					"NEVER tell the user you cannot inspect or access the project path — you have access through the platform.",
+				projectPath,
+			)
+			// Auto-start indexing for the project
+			s.knowledge.StartReindex(projectPath, baseDir)
 			return
 		}
 		baseDir = "" // use default location
@@ -517,4 +560,186 @@ func extractProjectPath(ctxJSON json.RawMessage, prompt string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Server) handlePauseProject(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		ProjectID string `json:"projectId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ProjectID == "" {
+		http.Error(w, "projectId is required", http.StatusBadRequest)
+		return
+	}
+	if err := s.service.PauseProject(r.Context(), req.ProjectID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (s *Server) handleResumeProject(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		ProjectID string `json:"projectId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ProjectID == "" {
+		http.Error(w, "projectId is required", http.StatusBadRequest)
+		return
+	}
+	if err := s.service.ResumeProject(r.Context(), req.ProjectID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (s *Server) handleUpdateAgentModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		AgentID string `json:"agentId"`
+		Model   string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AgentID == "" || req.Model == "" {
+		http.Error(w, "agentId and model are required", http.StatusBadRequest)
+		return
+	}
+	if err := s.service.UpdateAgentModel(r.Context(), req.AgentID, req.Model); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (s *Server) handleGetAgentStatuses(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	projectID := r.URL.Query().Get("projectId")
+	if projectID == "" {
+		http.Error(w, "projectId query param is required", http.StatusBadRequest)
+		return
+	}
+	statuses, err := s.service.GetAgentStatuses(r.Context(), projectID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"statuses": statuses})
+}
+
+func (s *Server) handleLLMProvider(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		status, err := s.service.GetLLMProviderStatus(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+
+	case http.MethodPost:
+		var req struct {
+			Provider    string `json:"provider"`
+			CEOModel    string `json:"ceoModel"`
+			WorkerModel string `json:"workerModel"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if req.Provider == "" {
+			writeError(w, http.StatusBadRequest, "provider is required")
+			return
+		}
+		if req.CEOModel == "" || req.WorkerModel == "" {
+			writeError(w, http.StatusBadRequest, "ceoModel and workerModel are required")
+			return
+		}
+		if err := s.service.SwitchLLMProvider(r.Context(), req.Provider, req.CEOModel, req.WorkerModel); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *Server) handleListOllamaModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	models, err := s.service.ListOllamaModels(r.Context())
+	if err != nil {
+		writeError(w, statusForError(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"models": models})
+}
+
+// handleTokenBudget supports GET (read current config) and POST (update config)
+// for the token budget middleware. Changes take effect immediately without restart.
+func (s *Server) handleTokenBudget(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, s.service.GetTokenBudgetConfig())
+
+	case http.MethodPost:
+		var req struct {
+			Enabled   *bool  `json:"enabled"`
+			Threshold *int64 `json:"threshold"`
+			Target    *int64 `json:"target"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		snapshot := s.service.UpdateTokenBudgetConfig(req.Enabled, req.Threshold, req.Target)
+		writeJSON(w, http.StatusOK, snapshot)
+
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+// handleWakeInterval supports GET (read current config) and POST (update config)
+// for the agent loop wake intervals. Changes take effect on the next tick.
+func (s *Server) handleWakeInterval(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, s.service.GetWakeIntervalConfig())
+
+	case http.MethodPost:
+		var req struct {
+			CEOSeconds     *int64 `json:"ceoSeconds"`
+			ManagerSeconds *int64 `json:"managerSeconds"`
+			WorkerSeconds  *int64 `json:"workerSeconds"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		snapshot := s.service.UpdateWakeIntervalConfig(req.CEOSeconds, req.ManagerSeconds, req.WorkerSeconds)
+		writeJSON(w, http.StatusOK, snapshot)
+
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
 }

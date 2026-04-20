@@ -15,7 +15,10 @@ import (
 const reuseSearchLimit = 3
 
 type roadmapPlanResponse struct {
+	Thinking      string                   `json:"thinking"`
+	UserMessage   string                   `json:"userMessage"`
 	Message       string                   `json:"message"`
+	Questions     []QuestionItem           `json:"questions"`
 	ReuseDecision roadmapReuseDecision     `json:"reuseDecision"`
 	Proposed      []roadmapMissionProposal `json:"proposedMissions"`
 	NextActions   []string                 `json:"nextActions"`
@@ -89,9 +92,17 @@ func (s *Service) planRoadmap(ctx context.Context, pack contextpacks.ContextPack
 		fallback := fallbackRoadmapPlan(pack, prompt, missionMatches, threadMatches)
 		planned = &fallback
 	}
-	if strings.TrimSpace(planned.Message) == "" {
+	// Resolve userMessage: prefer UserMessage, fall back to Message (legacy)
+	resolvedMessage := strings.TrimSpace(planned.UserMessage)
+	if resolvedMessage == "" {
+		resolvedMessage = strings.TrimSpace(planned.Message)
+	}
+	if resolvedMessage == "" {
 		fallback := fallbackRoadmapPlan(pack, prompt, missionMatches, threadMatches)
-		planned.Message = fallback.Message
+		resolvedMessage = fallback.UserMessage
+		if resolvedMessage == "" {
+			resolvedMessage = fallback.Message
+		}
 	}
 	if len(planned.Proposed) == 0 {
 		fallback := fallbackRoadmapPlan(pack, prompt, missionMatches, threadMatches)
@@ -108,7 +119,7 @@ func (s *Service) planRoadmap(ctx context.Context, pack contextpacks.ContextPack
 	if err != nil {
 		return nil, "", logValidationError("failed to persist roadmap proposals", err, "missionID", pack.Mission.ID, "threadID", pack.Thread.ID)
 	}
-	handoffs, err := s.delegateRoadmapMissions(pack, planned.Proposed, persistedMissions)
+	handoffs, err := s.delegateRoadmapMissions(ctx, pack, planned.Proposed, persistedMissions)
 	if err != nil {
 		return nil, "", logValidationError("failed to delegate roadmap missions", err, "missionID", pack.Mission.ID, "threadID", pack.Thread.ID)
 	}
@@ -117,8 +128,17 @@ func (s *Service) planRoadmap(ctx context.Context, pack contextpacks.ContextPack
 		return nil, "", logValidationError("failed to refresh roadmap mission state", err, "missionID", pack.Mission.ID, "threadID", pack.Thread.ID)
 	}
 
+	// Resolve thinking and questions from planner response
+	resolvedThinking := strings.TrimSpace(planned.Thinking)
+	resolvedQuestions := planned.Questions
+	if resolvedQuestions == nil {
+		resolvedQuestions = []QuestionItem{}
+	}
+
 	payload := map[string]any{
-		"message":                strings.TrimSpace(planned.Message),
+		"userMessage":            resolvedMessage,
+		"thinking":               resolvedThinking,
+		"questions":              resolvedQuestions,
 		"mode":                   ModeRoadmap,
 		"model":                  model,
 		"reuseDecision":          normalizeReuseDecision(planned.ReuseDecision, len(missionMatches), len(threadMatches)),
@@ -135,7 +155,7 @@ func (s *Service) planRoadmap(ctx context.Context, pack contextpacks.ContextPack
 		payload["plannerRaw"] = unwrapJSONResponse(rawPlan)
 	}
 
-	return payload, strings.TrimSpace(planned.Message), nil
+	return payload, resolvedMessage, nil
 }
 
 func (s *Service) refreshRoadmapMissionState(persistedMissions []missions.Mission, persistedThreads []threads.Thread) ([]missionstate.Summary, []missionstate.Rollup, error) {
@@ -184,7 +204,7 @@ func (s *Service) persistRoadmapMissions(pack contextpacks.ContextPack, proposal
 	return s.missionRuntime.PersistPlannedChildMissions(pack.Mission.ID, pack.Thread.ID, planned)
 }
 
-func (s *Service) delegateRoadmapMissions(pack contextpacks.ContextPack, proposals []roadmapMissionProposal, persistedMissions []missions.Mission) ([]missionDelegationSummary, error) {
+func (s *Service) delegateRoadmapMissions(ctx context.Context, pack contextpacks.ContextPack, proposals []roadmapMissionProposal, persistedMissions []missions.Mission) ([]missionDelegationSummary, error) {
 	if len(persistedMissions) == 0 {
 		return []missionDelegationSummary{}, nil
 	}
@@ -195,7 +215,7 @@ func (s *Service) delegateRoadmapMissions(pack contextpacks.ContextPack, proposa
 	handoffs := make([]missionDelegationSummary, 0, len(persistedMissions))
 	for _, mission := range persistedMissions {
 		proposal := proposalByKey[roadmapProposalKey(mission.Title, mission.MissionType)]
-		requirement, selection, err := s.delegateSelector.SelectDelegate(mission, proposal)
+		requirement, selection, err := s.delegateSelector.SelectDelegate(ctx, s.reasoner, mission, proposal)
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +254,20 @@ func (s *Service) generateRoadmapPlan(ctx context.Context, pack contextpacks.Con
 	if err != nil {
 		return nil, "", err
 	}
-	plannerPrompt := roadmapPrompt + " Respond as JSON with keys: message, reuseDecision, proposedMissions, nextActions. reuseDecision must include strategy and rationale. proposedMissions must be an array of 2 to 5 mission proposal objects with keys: title, charter, goal, scope, missionType, authorityLevel, reuseRefs, reasoning. Prefer adapting reusable work when the matches are strong, and only choose build_net_new when reuse is weak."
+	plannerPrompt := roadmapPrompt + `
+
+Additionally, include reuse analysis and mission proposals in your JSON response. The complete response must have these exact keys:
+
+- "thinking": Your full decomposition reasoning. Include mission breakdown, dependency graph, phasing logic, risk analysis, owner allocation, technology choices, and how missions connect. Be comprehensive — this is shown collapsed to the client. Minimum 500 words.
+- "userMessage": The client-facing roadmap narrative in rich markdown prose. Present the execution plan like a world-class CEO presenting the battle strategy. Explain EVERY mission — what it builds, why it matters, how it connects to other missions, what phase it belongs to, what it delivers. Use headers, sections, and clear structure. Minimum 800 words. NEVER produce a one-liner summary.
+- "questions": Array of approval/decision questions. Each: {"id": "q1", "text": "Your question?", "options": ["Option A", "Option B"], "allowCustom": true}. Use empty array if roadmap is ready.
+- "reuseDecision": Object with "strategy" (adapt_existing|build_net_new) and "rationale" explaining the reuse posture.
+- "proposedMissions": Array of 2-8 mission proposals. Each: {"title", "charter", "goal", "scope", "missionType", "authorityLevel", "reuseRefs": [], "reasoning"}.
+- "nextActions": Array of recommended next steps for the client.
+
+Prefer adapting reusable work when the matches are strong. Only choose build_net_new when reuse is weak.
+
+CRITICAL: The "userMessage" must be a comprehensive executive roadmap narrative, NOT a short summary. Write it like you are presenting to the board of directors.`
 
 	userPrompt := formatRoadmapPlannerInput(pack, prompt, missionMatches, threadMatches)
 	rawPlan, err := s.llm.Generate(ctx, model, plannerPrompt, userPrompt)
@@ -320,9 +353,17 @@ func fallbackRoadmapPlan(pack contextpacks.ContextPack, prompt string, missionMa
 		proposals = append(proposals, proposal)
 	}
 
-	message := fmt.Sprintf("I would decompose %s into %d mission-owned workstreams, using retained prior work first where it is relevant.", pack.Mission.Title, len(proposals))
+	message := fmt.Sprintf("## Roadmap: %s\n\nI've decomposed **%s** into **%d mission-owned workstreams**, each with a clear charter, goal, and execution scope. Here's the execution plan:\n\n", pack.Mission.Title, pack.Mission.Title, len(proposals))
+	for i, p := range proposals {
+		message += fmt.Sprintf("### Mission %d: %s\n\n**Charter:** %s\n\n**Goal:** %s\n\n**Scope:** %s\n\n---\n\n", i+1, p.Title, p.Charter, p.Goal, p.Scope)
+	}
+	message += "These missions are designed to execute in parallel where possible, with clear boundaries so each sub-CEO or execution owner can operate independently within their scope."
+
+	thinking := fmt.Sprintf("Analyzed the parent mission \"%s\" and decomposed it into %d workstreams. Strategy: %s. %s", pack.Mission.Title, len(proposals), strategy, rationale)
+
 	return roadmapPlanResponse{
-		Message: message,
+		Thinking:    thinking,
+		UserMessage: message,
 		ReuseDecision: roadmapReuseDecision{
 			Strategy:  strategy,
 			Rationale: rationale,

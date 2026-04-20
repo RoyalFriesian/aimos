@@ -1,3 +1,8 @@
+export interface CEOActionRequest {
+  type: string;
+  payload?: any;
+}
+
 export interface CEORequest {
   prompt: string;
   model?: string;
@@ -5,6 +10,7 @@ export interface CEORequest {
   threadId?: string;
   traceId?: string;
   context?: any;
+  action?: CEOActionRequest;
 }
 
 export interface CEOResponse {
@@ -322,6 +328,137 @@ export async function queryKnowledge(path: string, question: string, baseDir?: s
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Knowledge query failed: ${response.status} ${body}`);
+  }
+  return response.json();
+}
+
+// --- Project Pause/Resume ---
+
+export async function pauseProject(projectId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/projects/pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Pause project failed: ${response.status} ${body}`);
+  }
+}
+
+export async function resumeProject(projectId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/projects/resume`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Resume project failed: ${response.status} ${body}`);
+  }
+}
+
+// --- Agent Model Change ---
+
+export async function updateAgentModel(agentId: string, model: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/agents/model`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId, model }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Update agent model failed: ${response.status} ${body}`);
+  }
+}
+
+// --- Agent Loop Statuses ---
+
+export interface AgentLoopStatus {
+  agentId: string;
+  paused: boolean;
+  model: string;
+  nextWakeAt: string;
+  intervalSeconds: number;
+}
+
+export async function getAgentStatuses(projectId: string): Promise<AgentLoopStatus[]> {
+  const response = await fetch(`${API_BASE}/api/agents/status?projectId=${encodeURIComponent(projectId)}`);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Get agent statuses failed: ${response.status} ${body}`);
+  }
+  const data = await response.json();
+  return data.statuses || [];
+}
+
+// --- LLM Provider Settings ---
+
+export interface LLMProviderStatus {
+  provider: 'openai' | 'ollama';
+  ollamaOnline: boolean;
+  ceoModel: string;
+  workerModel: string;
+  ollamaModels?: string[];
+}
+
+export async function getLLMProviderStatus(): Promise<LLMProviderStatus> {
+  const response = await fetch(`${API_BASE}/api/settings/llm-provider`);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Get LLM provider status failed: ${response.status} ${body}`);
+  }
+  return response.json();
+}
+
+export async function switchLLMProvider(provider: 'openai' | 'ollama', ceoModel: string, workerModel: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/settings/llm-provider`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, ceoModel, workerModel }),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Switch LLM provider failed: ${response.status} ${body}`);
+  }
+}
+
+export async function listOllamaModels(): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/api/ollama/models`);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Failed to load Ollama models: ${response.status} ${body}`);
+  }
+  const data = await response.json();
+  return Array.isArray(data.models) ? data.models : [];
+}
+
+// --- Wake Interval Settings ---
+
+export interface WakeIntervalConfig {
+  ceoSeconds: number;
+  managerSeconds: number;
+  workerSeconds: number;
+}
+
+export async function getWakeIntervalConfig(): Promise<WakeIntervalConfig> {
+  const response = await fetch(`${API_BASE}/api/settings/wake-interval`);
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Get wake interval config failed: ${response.status} ${body}`);
+  }
+  return response.json();
+}
+
+export async function updateWakeIntervalConfig(config: Partial<WakeIntervalConfig>): Promise<WakeIntervalConfig> {
+  const response = await fetch(`${API_BASE}/api/settings/wake-interval`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Update wake interval config failed: ${response.status} ${body}`);
   }
   return response.json();
 }

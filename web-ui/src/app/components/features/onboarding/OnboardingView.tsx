@@ -310,8 +310,10 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
 
       const botMessage: Message = {
         id: res.responseId, agentId: 'ceo-agent',
-        content: res.payload?.message || res.payload?.Message || JSON.stringify(res.payload, null, 2),
+        content: res.payload?.userMessage || res.payload?.message || res.payload?.Message || JSON.stringify(res.payload, null, 2),
         timestamp: new Date(res.createdAt || Date.now()), type: 'agent',
+        messageType: res.mode,
+        contentJson: res.payload,
       };
 
       const newThread: Thread = {
@@ -365,8 +367,10 @@ export function OnboardingView({ onComplete }: OnboardingViewProps) {
 
       const botMessage: Message = {
         id: res.responseId, agentId: 'ceo-agent',
-        content: res.payload?.message || res.payload?.Message || JSON.stringify(res.payload, null, 2),
+        content: res.payload?.userMessage || res.payload?.message || res.payload?.Message || JSON.stringify(res.payload, null, 2),
         timestamp: new Date(res.createdAt || Date.now()), type: 'agent',
+        messageType: res.mode,
+        contentJson: res.payload,
       };
 
       const newThread: Thread = {

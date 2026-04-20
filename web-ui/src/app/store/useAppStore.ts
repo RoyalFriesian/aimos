@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { Project, Thread, IndexingStatus } from '../types';
+import { Project, Thread, IndexingStatus, AgentNodeType } from '../types';
 
 interface AppState {
   activeView: 'mindmap' | 'onboarding' | 'knowledge';
   isSidebarCollapsed: boolean;
   projects: Project[];
   workspaceThreads: Thread[] | null;
+  agentNodes: AgentNodeType[] | null;
   isLoadingProject: boolean;
 
   // Actions
@@ -14,6 +15,7 @@ interface AppState {
   setProjects: (projects: Project[]) => void;
   updateProject: (project: Project) => void;
   setWorkspaceThreads: (threads: Thread[] | null) => void;
+  setAgentNodes: (nodes: AgentNodeType[] | null) => void;
   setIsLoadingProject: (loading: boolean) => void;
   setProjectIndexingStatus: (projectId: string, status: IndexingStatus | undefined) => void;
 }
@@ -26,6 +28,7 @@ export const useAppStore = create<AppState>((set) => ({
   isSidebarCollapsed: false,
   projects: [],
   workspaceThreads: null,
+  agentNodes: null,
   isLoadingProject: false,
 
   setActiveView: (view) => set({ activeView: view }),
@@ -35,6 +38,7 @@ export const useAppStore = create<AppState>((set) => ({
     projects: state.projects.map((p) => p.id === updatedProject.id ? updatedProject : p)
   })),
   setWorkspaceThreads: (threads) => set({ workspaceThreads: threads }),
+  setAgentNodes: (nodes) => set({ agentNodes: nodes }),
   setIsLoadingProject: (loading) => set({ isLoadingProject: loading }),
   setProjectIndexingStatus: (projectId, status) => set((state) => ({
     projects: state.projects.map((p) =>

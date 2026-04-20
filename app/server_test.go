@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	aiclients "github.com/Sarnga/agent-platform/ai-clients"
 	"github.com/Sarnga/agent-platform/agents/ceo"
+	"github.com/Sarnga/agent-platform/pkg/agents"
 	"github.com/Sarnga/agent-platform/pkg/feedback"
 	"github.com/Sarnga/agent-platform/pkg/threads"
 )
@@ -58,6 +60,62 @@ func (s *stubCEOService) ListRootThreads(_ context.Context) ([]threads.Thread, e
 
 func (s *stubCEOService) LoadProject(_ context.Context, _ string) ([]threads.Thread, map[string][]threads.Message, error) {
 	return []threads.Thread{}, map[string][]threads.Message{}, nil
+}
+
+func (s *stubCEOService) LoadProjectAgents(_ context.Context, _ string) ([]agents.AgentNode, error) {
+	return []agents.AgentNode{}, nil
+}
+
+func (s *stubCEOService) RefinePrompt(_ context.Context, rawPrompt string, _ string) (string, error) {
+	return rawPrompt, nil
+}
+
+func (s *stubCEOService) ModelGuidance(_ context.Context, _ string, _ []string, _ string) (string, error) {
+	return "Use the default model.", nil
+}
+
+func (s *stubCEOService) PauseProject(_ context.Context, _ string) error {
+	return nil
+}
+
+func (s *stubCEOService) ResumeProject(_ context.Context, _ string) error {
+	return nil
+}
+
+func (s *stubCEOService) UpdateAgentModel(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
+func (s *stubCEOService) GetAgentStatuses(_ context.Context, _ string) ([]agents.LoopStatus, error) {
+	return []agents.LoopStatus{}, nil
+}
+
+func (s *stubCEOService) ListOllamaModels(_ context.Context) ([]string, error) {
+	return []string{"qwen2.5-coder:7b"}, nil
+}
+
+func (s *stubCEOService) GetLLMProviderStatus(_ context.Context) (ceo.LLMProviderStatus, error) {
+	return ceo.LLMProviderStatus{}, nil
+}
+
+func (s *stubCEOService) SwitchLLMProvider(_ context.Context, _ string, _ string, _ string) error {
+	return nil
+}
+
+func (s *stubCEOService) GetTokenBudgetConfig() aiclients.BudgetSnapshot {
+	return aiclients.BudgetSnapshot{Enabled: true, Threshold: 250, Target: 300}
+}
+
+func (s *stubCEOService) UpdateTokenBudgetConfig(_ *bool, _ *int64, _ *int64) aiclients.BudgetSnapshot {
+	return aiclients.BudgetSnapshot{Enabled: true, Threshold: 250, Target: 300}
+}
+
+func (s *stubCEOService) GetWakeIntervalConfig() agents.WakeIntervalSnapshot {
+	return agents.WakeIntervalSnapshot{CEOSeconds: 15, ManagerSeconds: 20, WorkerSeconds: 15}
+}
+
+func (s *stubCEOService) UpdateWakeIntervalConfig(_ *int64, _ *int64, _ *int64) agents.WakeIntervalSnapshot {
+	return agents.WakeIntervalSnapshot{CEOSeconds: 15, ManagerSeconds: 20, WorkerSeconds: 15}
 }
 
 func TestServerRespondEndpoint(t *testing.T) {

@@ -2,6 +2,7 @@ package aiclients
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,13 +16,15 @@ import (
 )
 
 type OpenAIConfig struct {
-	APIKey  string
-	BaseURL string
+	APIKey          string
+	BaseURL         string
+	MaxOutputTokens int64 // 0 = provider default
 }
 
 type OpenAIClient struct {
-	client openai.Client
-	logger *slog.Logger
+	client          openai.Client
+	logger          *slog.Logger
+	maxOutputTokens int64
 }
 
 func NewOpenAIClient(config OpenAIConfig, logger *slog.Logger) *OpenAIClient {
@@ -37,8 +40,9 @@ func NewOpenAIClient(config OpenAIConfig, logger *slog.Logger) *OpenAIClient {
 	}
 
 	return &OpenAIClient{
-		client: openai.NewClient(options...),
-		logger: logger,
+		client:          openai.NewClient(options...),
+		logger:          logger,
+		maxOutputTokens: config.MaxOutputTokens,
 	}
 }
 
@@ -70,10 +74,15 @@ func (c *OpenAIClient) GenerateFromMessages(ctx context.Context, model string, m
 		return "", errors.New("no non-empty messages provided")
 	}
 
-	response, err := c.client.Responses.New(ctx, responses.ResponseNewParams{
+	params := responses.ResponseNewParams{
 		Model: model,
 		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: input},
-	})
+	}
+	if c.maxOutputTokens > 0 {
+		params.MaxOutputTokens = param.NewOpt(c.maxOutputTokens)
+	}
+
+	response, err := c.client.Responses.New(ctx, params)
 	if err != nil {
 		wrapped := fmt.Errorf("create response: %w", err)
 		c.logger.Error("openai request failed", "error", wrapped, "model", model)
@@ -116,5 +125,128 @@ func roleToOpenAI(role threads.Role) responses.EasyInputMessageRole {
 		return responses.EasyInputMessageRoleAssistant
 	default:
 		return responses.EasyInputMessageRoleUser
+	}
+}
+
+// ToolExecutor is a callback that executes a tool call by name and returns
+// the result string to feed back to the model.
+type ToolExecutor func(ctx context.Context, name string, args json.RawMessage) (string, error)
+
+// ToolCallRecord captures one executed tool call for the caller.
+type ToolCallRecord struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+	Result    string `json:"result"`
+}
+
+// ToolCallResult is the final output of GenerateWithTools, containing the
+// model's text response plus every tool call that was executed.
+type ToolCallResult struct {
+	Text      string           `json:"text"`
+	ToolCalls []ToolCallRecord `json:"toolCalls,omitempty"`
+}
+
+// GenerateWithTools runs an OpenAI Responses API tool-calling loop.
+// It sends the initial prompt with the given tools, lets the model call
+// tools, feeds results back, and repeats until the model emits a text
+// response or maxRounds is reached.
+func (c *OpenAIClient) GenerateWithTools(
+	ctx context.Context,
+	model string,
+	systemPrompt string,
+	userPrompt string,
+	tools []responses.ToolUnionParam,
+	executor ToolExecutor,
+	maxRounds int,
+) (ToolCallResult, error) {
+	if maxRounds <= 0 {
+		maxRounds = 10
+	}
+
+	// Build initial input.
+	input := responses.ResponseInputParam{
+		responses.ResponseInputItemParamOfMessage(systemPrompt, responses.EasyInputMessageRoleSystem),
+		responses.ResponseInputItemParamOfMessage(userPrompt, responses.EasyInputMessageRoleUser),
+	}
+
+	params := responses.ResponseNewParams{
+		Model: model,
+		Input: responses.ResponseNewParamsInputUnion{OfInputItemList: input},
+		Tools: tools,
+	}
+	if c.maxOutputTokens > 0 {
+		params.MaxOutputTokens = param.NewOpt(c.maxOutputTokens)
+	}
+
+	var allToolCalls []ToolCallRecord
+
+	for round := 0; round < maxRounds; round++ {
+		response, err := c.client.Responses.New(ctx, params)
+		if err != nil {
+			return ToolCallResult{}, fmt.Errorf("tool-calling round %d: %w", round, err)
+		}
+
+		// Collect function calls from the response output.
+		var functionCalls []responses.ResponseFunctionToolCall
+		for _, item := range response.Output {
+			if item.Type == "function_call" {
+				functionCalls = append(functionCalls, item.AsFunctionCall())
+			}
+		}
+
+		// If no function calls, the model is done — return text.
+		if len(functionCalls) == 0 {
+			text := strings.TrimSpace(response.OutputText())
+			return ToolCallResult{Text: text, ToolCalls: allToolCalls}, nil
+		}
+
+		// Execute each tool call and build the next input.
+		// Start the next round's input with all previous output items
+		// plus the function call outputs.
+		for _, item := range response.Output {
+			input = append(input, responseOutputToInputParam(item))
+		}
+
+		for _, fc := range functionCalls {
+			c.logger.Debug("executing tool call", "name", fc.Name, "callID", fc.CallID, "round", round)
+
+			result, execErr := executor(ctx, fc.Name, json.RawMessage(fc.Arguments))
+			if execErr != nil {
+				result = fmt.Sprintf("error: %s", execErr.Error())
+			}
+
+			allToolCalls = append(allToolCalls, ToolCallRecord{
+				Name:      fc.Name,
+				Arguments: fc.Arguments,
+				Result:    result,
+			})
+
+			// Feed the result back as a function_call_output item.
+			input = append(input, responses.ResponseInputItemParamOfFunctionCallOutput(fc.CallID, result))
+		}
+
+		// Update params for next round.
+		params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: input}
+	}
+
+	// If we exhausted maxRounds, return whatever text we have.
+	return ToolCallResult{Text: "", ToolCalls: allToolCalls}, errors.New("tool-calling loop exceeded max rounds")
+}
+
+// responseOutputToInputParam converts a response output item back into an
+// input item so the conversation history is preserved across rounds.
+func responseOutputToInputParam(item responses.ResponseOutputItemUnion) responses.ResponseInputItemUnionParam {
+	switch item.Type {
+	case "function_call":
+		fc := item.AsFunctionCall()
+		return responses.ResponseInputItemParamOfFunctionCall(fc.Arguments, fc.CallID, fc.Name)
+	default:
+		// For message, reasoning, and other output types, use the item ID
+		// reference pattern. The API accepts output items as input items.
+		return responses.ResponseInputItemUnionParam{
+			OfItemReference: &responses.ResponseInputItemItemReferenceParam{
+				ID: item.ID,
+			},
+		}
 	}
 }

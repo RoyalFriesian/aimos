@@ -13,7 +13,7 @@ import (
 	"github.com/Sarnga/agent-platform/pkg/threads"
 )
 
-func (s *Service) SubmitFeedback(_ context.Context, submission FeedbackSubmission) (feedback.Record, error) {
+func (s *Service) SubmitFeedback(ctx context.Context, submission FeedbackSubmission) (feedback.Record, error) {
 	if err := submission.Validate(); err != nil {
 		return feedback.Record{}, err
 	}
@@ -65,7 +65,7 @@ func (s *Service) SubmitFeedback(_ context.Context, submission FeedbackSubmissio
 		TraceID:                 strings.TrimSpace(submission.TraceID),
 		Rating:                  submission.Rating,
 		Reason:                  strings.TrimSpace(submission.Reason),
-		Categories:              encodeStringSlice(classifyFeedbackReason(submission.Reason)),
+		Categories:              encodeStringSlice(classifyFeedbackReason(ctx, s, submission.Reason)),
 		ClientMessage:           clientMessageText,
 		CEOResponse:             responseMessage.Content,
 		Mode:                    responseMessage.Mode,
@@ -166,37 +166,56 @@ func anyToStrings(value any) []string {
 	return results
 }
 
-func classifyFeedbackReason(reason string) []string {
-	trimmed := strings.ToLower(strings.TrimSpace(reason))
+func classifyFeedbackReason(ctx context.Context, s *Service, reason string) []string {
+	trimmed := strings.TrimSpace(reason)
 	if trimmed == "" {
 		return []string{}
 	}
-	categories := []string{}
-	if strings.Contains(trimmed, "unclear") || strings.Contains(trimmed, "confus") || strings.Contains(trimmed, "follow") {
-		categories = append(categories, "unclear")
+	if s != nil && s.reasoner != nil {
+		task := "Classify this user feedback reason into one or more categories from this list: unclear, too_shallow, wrong_direction, missing_detail, poor_presentation, too_verbose, not_actionable, did_not_understand_business_intent. Return ONLY a comma-separated list of matching categories, nothing else. If none match, return empty."
+		result, err := s.reasoner.Reason(ctx, task, trimmed)
+		if err == nil {
+			result = strings.TrimSpace(result)
+			if result != "" && result != "empty" {
+				parts := strings.Split(result, ",")
+				categories := make([]string, 0, len(parts))
+				for _, p := range parts {
+					p = strings.TrimSpace(p)
+					if p != "" {
+						categories = append(categories, p)
+					}
+				}
+				if len(categories) > 0 {
+					return uniqueStrings(categories)
+				}
+			}
+		}
 	}
-	if strings.Contains(trimmed, "shallow") || strings.Contains(trimmed, "surface") || strings.Contains(trimmed, "deeper") {
-		categories = append(categories, "too_shallow")
+	// Keyword fallback when no reasoner is available.
+	lower := strings.ToLower(trimmed)
+	categoryKeywords := map[string][]string{
+		"unclear":                           {"unclear", "confusing", "vague", "ambiguous", "hard to understand"},
+		"too_shallow":                       {"shallow", "surface", "not enough depth", "too brief", "superficial"},
+		"wrong_direction":                   {"wrong direction", "off track", "different direction", "not what i asked", "misunderstood"},
+		"missing_detail":                    {"missing detail", "not enough detail", "lacks detail", "more detail", "incomplete"},
+		"poor_presentation":                 {"presentation", "formatting", "layout", "ugly", "hard to read"},
+		"too_verbose":                       {"verbose", "too long", "too much", "wordy", "rambling"},
+		"not_actionable":                    {"not actionable", "can't act on", "cannot act", "no next step", "what do i do"},
+		"did_not_understand_business_intent": {"business intent", "business goal", "purpose", "why", "objective"},
 	}
-	if strings.Contains(trimmed, "wrong direction") || strings.Contains(trimmed, "wrong") || strings.Contains(trimmed, "off target") {
-		categories = append(categories, "wrong_direction")
+	var categories []string
+	for category, keywords := range categoryKeywords {
+		for _, kw := range keywords {
+			if strings.Contains(lower, kw) {
+				categories = append(categories, category)
+				break
+			}
+		}
 	}
-	if strings.Contains(trimmed, "detail") || strings.Contains(trimmed, "specific") || strings.Contains(trimmed, "missing") {
-		categories = append(categories, "missing_detail")
+	if len(categories) > 0 {
+		return uniqueStrings(categories)
 	}
-	if strings.Contains(trimmed, "present") || strings.Contains(trimmed, "format") || strings.Contains(trimmed, "structure") {
-		categories = append(categories, "poor_presentation")
-	}
-	if strings.Contains(trimmed, "verbose") || strings.Contains(trimmed, "too long") {
-		categories = append(categories, "too_verbose")
-	}
-	if strings.Contains(trimmed, "actionable") || strings.Contains(trimmed, "next step") {
-		categories = append(categories, "not_actionable")
-	}
-	if strings.Contains(trimmed, "business") || strings.Contains(trimmed, "intent") || strings.Contains(trimmed, "goal") {
-		categories = append(categories, "did_not_understand_business_intent")
-	}
-	return uniqueStrings(categories)
+	return []string{}
 }
 
 func encodeStringSlice(values []string) json.RawMessage {

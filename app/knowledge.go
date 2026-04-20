@@ -302,6 +302,51 @@ func (ks *KnowledgeService) handleReindex(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// ReindexInBackground triggers an incremental re-index of the given project
+// path in a background goroutine. It is safe to call from agent loops after
+// file writes — duplicate requests for the same path are coalesced by the
+// existing job-tracking logic.
+func (ks *KnowledgeService) ReindexInBackground(_ context.Context, projectPath string) {
+	if projectPath == "" {
+		return
+	}
+	key := indexingKey(projectPath, ks.cfg.BaseDir)
+	ks.mu.Lock()
+	if job, exists := ks.indexing[key]; exists && !job.Done {
+		// Already indexing — skip.
+		ks.mu.Unlock()
+		return
+	}
+	job := &indexJob{Stage: "checking", Current: 0, Total: 0, BaseDir: ks.cfg.BaseDir}
+	ks.indexing[key] = job
+	ks.mu.Unlock()
+
+	go func() {
+		slog.Info("agent-triggered reindex started", "path", projectPath)
+		progress := func(stage string, current, total int) {
+			ks.mu.Lock()
+			job.Stage = stage
+			job.Current = current
+			job.Total = total
+			ks.mu.Unlock()
+		}
+		manifest, changed, err := knowledge.ReindexRepo(context.Background(), ks.client, projectPath, ks.cfg, progress)
+		ks.mu.Lock()
+		job.Done = true
+		job.Changed = changed
+		if err != nil {
+			job.Error = err.Error()
+			job.Stage = "failed"
+			slog.Error("agent-triggered reindex failed", "path", projectPath, "error", err)
+		} else {
+			job.Stage = "ready"
+			job.RepoID = manifest.Repo.ID
+			slog.Info("agent-triggered reindex complete", "path", projectPath, "changed", changed)
+		}
+		ks.mu.Unlock()
+	}()
+}
+
 func (ks *KnowledgeService) handleQuery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")

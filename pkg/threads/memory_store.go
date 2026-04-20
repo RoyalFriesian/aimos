@@ -79,6 +79,18 @@ func (s *MemoryStore) ListByMission(missionID string) ([]Thread, error) {
 	return threadsForMission, nil
 }
 
+func (s *MemoryStore) ListByRootMission(rootMissionID string) ([]Thread, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var result []Thread
+	for _, thread := range s.threads {
+		if thread.RootMissionID == rootMissionID || thread.MissionID == rootMissionID {
+			result = append(result, thread)
+		}
+	}
+	return result, nil
+}
+
 func (s *MemoryStore) SearchReusableThreads(query string, limit int) ([]ReusableThreadMatch, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -191,6 +203,22 @@ func (s *MemoryStore) UpdateThreadTitle(threadID string, title string) error {
 	}
 
 	thread.Title = title
+	thread.UpdatedAt = time.Now().UTC()
+	s.threads[threadID] = thread
+
+	return nil
+}
+
+func (s *MemoryStore) UpdateThreadStatus(threadID string, status ThreadStatus) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	thread, exists := s.threads[threadID]
+	if !exists {
+		return ErrThreadNotFound
+	}
+
+	thread.Status = status
 	thread.UpdatedAt = time.Now().UTC()
 	s.threads[threadID] = thread
 

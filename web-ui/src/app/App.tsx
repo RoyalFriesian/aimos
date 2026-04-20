@@ -1,13 +1,14 @@
 import { MindmapView } from './components/features/workspace/MindmapView';
 import { Sidebar } from './components/features/layout/Sidebar';
 import { KnowledgeView } from './components/features/knowledge/KnowledgeView';
+import { SettingsModal } from './components/features/settings/SettingsModal';
 import { Toaster } from './components/ui/sonner';
 import { ThemeProvider } from './components/ThemeProvider';
 import { ReactFlowProvider } from '@xyflow/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listProjects, loadProject, renameProject, getIndexStatus, checkIndex } from './api/client';
 import { OnboardingView } from './components/features/onboarding/OnboardingView';
-import { Thread, Project, IndexingStatus } from './types';
+import { Thread, Project, IndexingStatus, AgentNodeType } from './types';
 import { useAppStore } from './store/useAppStore';
 
 function parseMessageContentJSON(raw: unknown): unknown {
@@ -69,10 +70,12 @@ export default function App() {
     workspaceThreads, setWorkspaceThreads,
     projects, setProjects,
     setIsLoadingProject, updateProject,
-    setProjectIndexingStatus
+    setProjectIndexingStatus,
+    setAgentNodes,
   } = useAppStore();
 
   const indexPollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Initialize UI by fetching available projects from the CEO backend API
   useEffect(() => {
@@ -150,6 +153,35 @@ export default function App() {
           childIds: data.threads.filter((child: any) => child.ParentThreadID === t.ID).map((child: any) => child.ID)
         }));
         setWorkspaceThreads(parsedThreads);
+
+        // Parse agent nodes from API response
+        if (data.agents && Array.isArray(data.agents) && data.agents.length > 0) {
+          const parsedAgents: AgentNodeType[] = data.agents.map((a: any) => ({
+            id: a.id,
+            parentAgentId: a.parentAgentId || null,
+            rootAgentId: a.rootAgentId || null,
+            projectId: a.projectId,
+            threadId: a.threadId,
+            missionId: a.missionId,
+            name: a.name,
+            role: a.role,
+            problemStatement: a.problemStatement || '',
+            status: a.status || 'active',
+            model: a.model || '',
+            paused: a.paused || false,
+            createdAt: a.createdAt ? new Date(a.createdAt) : new Date(),
+            updatedAt: a.updatedAt ? new Date(a.updatedAt) : new Date(),
+            childIds: [],
+          }));
+          // Compute childIds
+          for (const agent of parsedAgents) {
+            agent.childIds = parsedAgents.filter(c => c.parentAgentId === agent.id).map(c => c.id);
+          }
+          setAgentNodes(parsedAgents);
+        } else {
+          setAgentNodes(null);
+        }
+
         setActiveView('mindmap');
 
         // Recover projectPath and indexing status for older projects
@@ -317,7 +349,9 @@ export default function App() {
           }}
           onSelectProject={handleSelectProject}
           onOpenKnowledge={() => setActiveView('knowledge')}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
+        <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
         <Toaster position="bottom-right" />
       </div>
     </ThemeProvider>

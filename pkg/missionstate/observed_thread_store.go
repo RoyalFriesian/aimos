@@ -33,6 +33,10 @@ func (s *observedThreadStore) ListByMission(missionID string) ([]threads.Thread,
 	return s.base.ListByMission(missionID)
 }
 
+func (s *observedThreadStore) ListByRootMission(rootMissionID string) ([]threads.Thread, error) {
+	return s.base.ListByRootMission(rootMissionID)
+}
+
 func (s *observedThreadStore) ListRootThreads() ([]threads.Thread, error) {
 	return s.base.ListRootThreads()
 }
@@ -69,6 +73,10 @@ func (s *observedThreadStore) UpdateThreadTitle(threadID string, title string) e
 
 func (s *observedThreadStore) UpdateThreadOwner(threadID string, ownerAgentID string) error {
 	return s.base.UpdateThreadOwner(threadID, ownerAgentID)
+}
+
+func (s *observedThreadStore) UpdateThreadStatus(threadID string, status threads.ThreadStatus) error {
+	return s.base.UpdateThreadStatus(threadID, status)
 }
 
 var _ threads.Store = (*observedThreadStore)(nil)

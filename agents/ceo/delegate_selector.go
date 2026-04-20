@@ -1,11 +1,13 @@
 package ceo
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/Sarnga/agent-platform/pkg/agents"
+	"github.com/Sarnga/agent-platform/pkg/microai"
 	"github.com/Sarnga/agent-platform/pkg/missions"
 )
 
@@ -45,8 +47,8 @@ func newDelegateSelector() (*delegateSelector, error) {
 	return &delegateSelector{directory: directory}, nil
 }
 
-func (s *delegateSelector) SelectDelegate(mission missions.Mission, proposal roadmapMissionProposal) (delegateRequirement, delegateSelection, error) {
-	requirement := buildDelegateRequirement(mission, proposal)
+func (s *delegateSelector) SelectDelegate(ctx context.Context, reasoner microai.Interface, mission missions.Mission, proposal roadmapMissionProposal) (delegateRequirement, delegateSelection, error) {
+	requirement := buildDelegateRequirement(ctx, reasoner, mission, proposal)
 	claimed, err := s.directory.ClaimByCapabilities(requirement.Role, requirement.RequiredCapabilities)
 	if err == nil {
 		return requirement, delegateSelection{
@@ -77,9 +79,9 @@ func (s *delegateSelector) SelectDelegate(mission missions.Mission, proposal roa
 	}, nil
 }
 
-func buildDelegateRequirement(mission missions.Mission, proposal roadmapMissionProposal) delegateRequirement {
+func buildDelegateRequirement(ctx context.Context, reasoner microai.Interface, mission missions.Mission, proposal roadmapMissionProposal) delegateRequirement {
 	role := delegationKindForMission(mission)
-	topics := inferMissionTopics(mission, proposal)
+	topics := inferMissionTopics(ctx, reasoner, mission, proposal)
 	capabilities := []string{
 		"handoff:" + role,
 		"mission:" + strings.TrimSpace(strings.ToLower(mission.MissionType)),
@@ -141,23 +143,39 @@ func selectionRationale(requirement delegateRequirement, match agents.Capability
 	return fmt.Sprintf("Selected directory delegate %s because it is the strongest available capability match for %s ownership.", match.Profile.ID, requirement.Role)
 }
 
-func inferMissionTopics(mission missions.Mission, proposal roadmapMissionProposal) []string {
-	text := strings.ToLower(strings.Join([]string{mission.Title, mission.Goal, mission.Scope, proposal.Title, proposal.Goal, proposal.Scope, proposal.Reasoning}, " "))
-	topicCatalog := []string{"networking", "connectivity", "compute", "runtime", "scheduling", "storage", "data", "identity", "security", "orchestration", "platform", "execution"}
-	topics := make([]string, 0, 4)
-	seen := map[string]struct{}{}
-	for _, topic := range topicCatalog {
-		if !strings.Contains(text, topic) {
-			continue
+func inferMissionTopics(ctx context.Context, reasoner microai.Interface, mission missions.Mission, proposal roadmapMissionProposal) []string {
+	text := strings.Join([]string{mission.Title, mission.Goal, mission.Scope, proposal.Title, proposal.Goal, proposal.Scope, proposal.Reasoning}, " ")
+	if reasoner != nil {
+		task := "Extract the most relevant topic tags for this mission from this list: networking, connectivity, compute, runtime, scheduling, storage, data, identity, security, orchestration, platform, execution. Return ONLY a comma-separated list of matching topics. If none match, return platform."
+		result, err := reasoner.Reason(ctx, task, text)
+		if err == nil {
+			result = strings.TrimSpace(result)
+			if result != "" {
+				parts := strings.Split(result, ",")
+				topics := make([]string, 0, len(parts))
+				for _, p := range parts {
+					p = strings.TrimSpace(strings.ToLower(p))
+					if p != "" {
+						topics = append(topics, p)
+					}
+				}
+				if len(topics) > 0 {
+					return topics
+				}
+			}
 		}
-		if _, exists := seen[topic]; exists {
-			continue
+	}
+	// Keyword fallback when no reasoner is available.
+	lower := strings.ToLower(text)
+	knownTopics := []string{"networking", "connectivity", "compute", "runtime", "scheduling", "storage", "data", "identity", "security", "orchestration", "platform", "execution"}
+	var found []string
+	for _, t := range knownTopics {
+		if strings.Contains(lower, t) {
+			found = append(found, t)
 		}
-		seen[topic] = struct{}{}
-		topics = append(topics, topic)
 	}
-	if len(topics) == 0 {
-		topics = append(topics, "platform")
+	if len(found) > 0 {
+		return found
 	}
-	return topics
+	return []string{"platform"}
 }

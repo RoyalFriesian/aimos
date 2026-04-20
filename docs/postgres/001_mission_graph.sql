@@ -212,4 +212,24 @@ CREATE TABLE ceo_feedback (
 );
 
 CREATE INDEX idx_ceo_feedback_thread_id_created_at ON ceo_feedback(thread_id, created_at DESC);
+
+CREATE TABLE agent_nodes (
+    agent_id TEXT PRIMARY KEY,
+    parent_agent_id TEXT REFERENCES agent_nodes(agent_id) ON DELETE SET NULL,
+    root_agent_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    thread_id TEXT NOT NULL,
+    mission_id TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL CHECK (role IN ('CEO', 'Manager', 'Worker')),
+    depth INTEGER NOT NULL DEFAULT 0,
+    problem_statement TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_agent_nodes_project_id ON agent_nodes(project_id);
+CREATE INDEX idx_agent_nodes_parent_agent_id ON agent_nodes(parent_agent_id);
+CREATE INDEX idx_agent_nodes_status ON agent_nodes(status);
 CREATE INDEX idx_ceo_feedback_response_id ON ceo_feedback(response_id);

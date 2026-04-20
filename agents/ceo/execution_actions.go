@@ -6,10 +6,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sarnga/agent-platform/pkg/agents"
 	"github.com/Sarnga/agent-platform/pkg/execution"
+	"github.com/Sarnga/agent-platform/pkg/gitops"
 	"github.com/Sarnga/agent-platform/pkg/missions"
 	"github.com/Sarnga/agent-platform/pkg/threads"
 )
+
+type approveTeamActionPayload struct {
+	TeamProposal *TeamProposal `json:"teamProposal"`
+}
+
+type rejectTeamActionPayload struct {
+	Reason string `json:"reason"`
+}
 
 type createTodoActionPayload struct {
 	Title         string            `json:"title"`
@@ -220,9 +230,229 @@ func (s *Service) executeMissionAction(action ActionRequest, thread threads.Thre
 		}
 		message := fmt.Sprintf("Cancelled timer %q for mission %s.", timer.ActionType, thread.MissionID)
 		return executionActionPayload(action.Type, thread, message, map[string]any{"timer": timerToPayload(timer)}), message, nil
+	case ActionApproveTeam:
+		var input approveTeamActionPayload
+		if err := decodeActionPayload(action.Payload, &input); err != nil {
+			return nil, "", err
+		}
+		return s.executeApproveTeam(input, thread)
+	case ActionRejectTeam:
+		var input rejectTeamActionPayload
+		if err := decodeActionPayload(action.Payload, &input); err != nil {
+			return nil, "", err
+		}
+		message := fmt.Sprintf("Team proposal rejected for mission %s. Reason: %s", thread.MissionID, strings.TrimSpace(input.Reason))
+		return executionActionPayload(action.Type, thread, message, map[string]any{"rejected": true, "reason": input.Reason}), message, nil
 	default:
 		return nil, "", logValidationError("unsupported CEO execution action", fmt.Errorf("unsupported action type %q", action.Type), "actionType", action.Type)
 	}
+}
+
+func (s *Service) executeApproveTeam(input approveTeamActionPayload, thread threads.Thread) (map[string]any, string, error) {
+	if input.TeamProposal == nil || len(input.TeamProposal.Members) == 0 {
+		return nil, "", logValidationError("invalid approve_team payload", fmt.Errorf("teamProposal with at least one member is required"), "missionID", thread.MissionID)
+	}
+
+	parentMission, err := s.missionStore.GetMission(thread.MissionID)
+	if err != nil {
+		return nil, "", logValidationError("failed to load parent mission", err, "missionID", thread.MissionID)
+	}
+
+	// Git: initialize the project repository and create worktrees per worker.
+	projectDir := s.resolveProjectLocation(thread.ID)
+	if projectDir != "" {
+		if gitErr := gitops.InitRepo(projectDir); gitErr != nil {
+			logger.Error("gitops: failed to init repo", "projectDir", projectDir, "error", gitErr)
+		}
+	}
+
+	type memberResult struct {
+		MissionID string `json:"missionId"`
+		ThreadID  string `json:"threadId"`
+		AgentID   string `json:"agentId"`
+		Role      string `json:"role"`
+		Name      string `json:"name"`
+		TodoID    string `json:"todoId"`
+	}
+
+	results := make([]memberResult, 0, len(input.TeamProposal.Members))
+	for i, member := range input.TeamProposal.Members {
+		missionTitle := strings.TrimSpace(member.MissionTitle)
+		if missionTitle == "" {
+			missionTitle = fmt.Sprintf("%s — %s", member.Role, member.Name)
+		}
+		missionID := fmt.Sprintf("team-%s-%d-%d", thread.MissionID, i, time.Now().UnixNano())
+		threadID := fmt.Sprintf("thread-%s", missionID)
+		agentID := missionDelegateSlug(member.Name)
+		if agentID == "" {
+			agentID = fmt.Sprintf("agent-%d", i)
+		}
+
+		childMission, childThread, err := s.missionRuntime.CreateChildMission(missions.ChildMissionInput{
+			MissionID:       missionID,
+			ParentMissionID: thread.MissionID,
+			ThreadID:        threadID,
+			OwnerAgentID:    agentID,
+			OwnerRole:       strings.ToLower(strings.TrimSpace(member.Role)),
+			MissionType:     "execution",
+			ThreadKind:      "execution",
+			MissionTitle:    missionTitle,
+			Charter:         strings.TrimSpace(member.MissionDescription),
+			Goal:            strings.TrimSpace(member.MissionDescription),
+			Scope:           parentMission.Scope,
+			AuthorityLevel:  "execution",
+			ThreadTitle:     fmt.Sprintf("%s execution thread", missionTitle),
+			ThreadSummary:   strings.TrimSpace(member.MissionDescription),
+			ThreadContext:   fmt.Sprintf("Execution thread for %s (%s) under parent mission %s.", member.Name, member.Role, parentMission.Title),
+			ParentThreadID:  thread.ID,
+		})
+		if err != nil {
+			return nil, "", logValidationError("failed to create team member mission", err, "missionID", thread.MissionID, "member", member.Name)
+		}
+
+		todo, err := s.executionRuntime.CreateTodo(execution.CreateTodoInput{
+			MissionID:    childMission.ID,
+			ThreadID:     childThread.ID,
+			Title:        fmt.Sprintf("Execute: %s", missionTitle),
+			Description:  strings.TrimSpace(member.MissionDescription),
+			OwnerAgentID: agentID,
+			Priority:     missions.PriorityHigh,
+		})
+		if err != nil {
+			return nil, "", logValidationError("failed to create team member todo", err, "missionID", childMission.ID)
+		}
+
+		results = append(results, memberResult{
+			MissionID: childMission.ID,
+			ThreadID:  childThread.ID,
+			AgentID:   agentID,
+			Role:      member.Role,
+			Name:      member.Name,
+			TodoID:    todo.ID,
+		})
+
+		// Create agent node for the mindmap tree
+		parentCEONodeID := fmt.Sprintf("agent-ceo-%s", thread.ID)
+		rootAgentID := parentCEONodeID
+		nodeRole := agents.NodeRoleWorker
+		switch strings.ToLower(strings.TrimSpace(member.Role)) {
+		case "manager", "lead", "architect":
+			nodeRole = agents.NodeRoleManager
+		case "ceo", "sub-ceo":
+			nodeRole = agents.NodeRoleCEO
+		case "tester", "qa", "quality":
+			nodeRole = agents.NodeRoleTester
+		}
+		if err := s.nodeStore.CreateNode(agents.AgentNode{
+			ID:               agentID,
+			ParentAgentID:    parentCEONodeID,
+			RootAgentID:      rootAgentID,
+			ProjectID:        thread.ID,
+			ThreadID:         childThread.ID,
+			MissionID:        childMission.ID,
+			Name:             member.Name,
+			Role:             nodeRole,
+			Depth:            1,
+			ProblemStatement: strings.TrimSpace(member.MissionDescription),
+			Status:           "active",
+			Model:            s.config.EffectiveChildModel(),
+			CreatedAt:        time.Now().UTC(),
+			UpdatedAt:        time.Now().UTC(),
+		}); err != nil {
+			logger.Error("failed to create agent node for team member", "error", err, "agentID", agentID)
+		}
+
+		// Start autonomous agent loop for this worker.
+		// Workers get their own git worktree for isolated file writes.
+		workerProjectDir := ""
+		if projectDir != "" {
+			wtDir, wtErr := gitops.CreateWorktree(projectDir, agentID)
+			if wtErr != nil {
+				logger.Error("gitops: failed to create worktree", "agentID", agentID, "error", wtErr)
+				workerProjectDir = projectDir // fallback: share the main repo dir
+			} else {
+				workerProjectDir = wtDir
+			}
+		}
+		s.startAgentLoopWithLocation(agents.AgentNode{
+			ID:        agentID,
+			Role:      nodeRole,
+			MissionID: childMission.ID,
+			ThreadID:  childThread.ID,
+			ProjectID: thread.ID,
+			Depth:     1,
+			Model:     s.config.EffectiveChildModel(),
+		}, workerProjectDir)
+
+		// Post initial guidance to the worker's thread so the first turn
+		// has concrete context instead of an empty conversation.
+		branchInfo := ""
+		if workerProjectDir != "" && workerProjectDir != projectDir {
+			branchInfo = fmt.Sprintf("\n\nYou are working on git branch: worker/%s\nYour worktree directory: %s\nAll files you write go to your isolated branch. They will be merged into main when your work is approved.",
+				gitops.BranchName(agentID), workerProjectDir)
+		}
+		guidanceMsg := fmt.Sprintf(
+			"You are %s (%s). Your mission: %s\n\nYour first todo: %s\nTodo description: %s\n\nStart by using start_todo, then write the required files with write_file, and deliver with deliver_work.%s",
+			member.Name, member.Role,
+			strings.TrimSpace(member.MissionDescription),
+			todo.Title,
+			strings.TrimSpace(member.MissionDescription),
+			branchInfo,
+		)
+		_ = s.threadStore.AppendMessage(threads.Message{
+			ID:            fmt.Sprintf("guidance-%s-%d", agentID, time.Now().UnixNano()),
+			ThreadID:      childThread.ID,
+			Role:          threads.RoleUser,
+			AuthorAgentID: "ceo",
+			AuthorRole:    "ceo",
+			MessageType:   "initial_guidance",
+			Content:       guidanceMsg,
+			CreatedAt:     time.Now().UTC(),
+		})
+	}
+
+	// Schedule a CEO check-in timer for 30 minutes from now.
+	checkInTime := time.Now().UTC().Add(30 * time.Minute)
+	checkInPayloadJSON, _ := json.Marshal(map[string]any{
+		"reason": "Team approved — CEO should check progress on delegated execution missions.",
+	})
+	checkInTimer, err := s.executionRuntime.ScheduleTimer(execution.ScheduleTimerInput{
+		MissionID:     thread.MissionID,
+		ThreadID:      thread.ID,
+		SetByAgentID:  "ceo",
+		WakeAt:        checkInTime,
+		ActionType:    "status_check",
+		ActionPayload: checkInPayloadJSON,
+	})
+	if err != nil {
+		return nil, "", logValidationError("failed to schedule CEO check-in timer", err, "missionID", thread.MissionID)
+	}
+
+	// Refresh summaries & rollups for new child missions.
+	for _, result := range results {
+		_, _, _ = s.missionStateRuntime.RefreshMissionState(result.MissionID, result.ThreadID)
+	}
+
+	// Start the CEO's own autonomous loop to supervise workers.
+	ceoNodeID := fmt.Sprintf("agent-ceo-%s", thread.ID)
+	s.startAgentLoop(agents.AgentNode{
+		ID:        ceoNodeID,
+		Role:      agents.NodeRoleCEO,
+		MissionID: thread.MissionID,
+		ThreadID:  thread.ID,
+		ProjectID: thread.ID,
+		Depth:     0,
+	})
+
+	message := fmt.Sprintf("Team approved. Created %d execution missions under %s. CEO check-in scheduled at %s.",
+		len(results), parentMission.Title, checkInTimer.WakeAt.Format(time.RFC3339))
+
+	return executionActionPayload(ActionApproveTeam, thread, message, map[string]any{
+		"approved":     true,
+		"teamMembers":  results,
+		"checkInTimer": timerToPayload(checkInTimer),
+		"userMessage":  message,
+	}), message, nil
 }
 
 func executionActionPayload(actionType ActionType, thread threads.Thread, message string, result map[string]any) map[string]any {
